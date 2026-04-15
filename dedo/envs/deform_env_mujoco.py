@@ -75,6 +75,143 @@ def _clean_obj_for_flexcomp(src_path: str, dst_path: str) -> None:
             f.write(f'f {tri[0] + 1} {tri[1] + 1} {tri[2] + 1}\n')
 
 
+def _rpy_to_mat(rpy):
+    r, p, y = rpy
+    cr, sr = np.cos(r), np.sin(r)
+    cp, sp = np.cos(p), np.sin(p)
+    cy, sy = np.cos(y), np.sin(y)
+    Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
+    Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
+    Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
+    return Rz @ Ry @ Rx
+
+
+def _mat_to_quat(R):
+    # Returns (w, x, y, z)
+    tr = R[0, 0] + R[1, 1] + R[2, 2]
+    if tr > 0:
+        s = 2.0 * np.sqrt(tr + 1.0)
+        w = 0.25 * s
+        x = (R[2, 1] - R[1, 2]) / s
+        y = (R[0, 2] - R[2, 0]) / s
+        z = (R[1, 0] - R[0, 1]) / s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+        w = (R[2, 1] - R[1, 2]) / s
+        x = 0.25 * s
+        y = (R[0, 1] + R[1, 0]) / s
+        z = (R[0, 2] + R[2, 0]) / s
+    elif R[1, 1] > R[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+        w = (R[0, 2] - R[2, 0]) / s
+        x = (R[0, 1] + R[1, 0]) / s
+        y = 0.25 * s
+        z = (R[1, 2] + R[2, 1]) / s
+    else:
+        s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+        w = (R[1, 0] - R[0, 1]) / s
+        x = (R[0, 2] + R[2, 0]) / s
+        y = (R[1, 2] + R[2, 1]) / s
+        z = 0.25 * s
+    return np.array([w, x, y, z])
+
+
+def _urdf_to_mjcf_geoms(urdf_path: str, base_pos, base_ori_rpy, scale: float,
+                       rgba=None) -> str:
+    """Convert a static URDF (fixed joints, primitive geoms) into MJCF geom XML.
+
+    Only covers what the dedo rigid scene URDFs actually use: fixed joints,
+    visual geometries of type cylinder/box/sphere. Collision geoms are merged
+    with visual (we emit one geom per visual). All geoms are static (attached
+    to worldbody) with fixed poses derived from the URDF joint chain.
+    """
+    import xml.etree.ElementTree as ET
+    tree = ET.parse(urdf_path)
+    root = tree.getroot()
+
+    # Build link and joint maps.
+    links = {link.get('name'): link for link in root.findall('link')}
+    # joints: child_link -> (parent_link, origin_xyz, origin_rpy)
+    child_to_joint = {}
+    for j in root.findall('joint'):
+        parent = j.find('parent').get('link')
+        child = j.find('child').get('link')
+        origin = j.find('origin')
+        xyz = [0, 0, 0]
+        rpy = [0, 0, 0]
+        if origin is not None:
+            xyz = [float(v) for v in origin.get('xyz', '0 0 0').split()]
+            rpy = [float(v) for v in origin.get('rpy', '0 0 0').split()]
+        child_to_joint[child] = (parent, xyz, rpy)
+
+    # Find root link (no incoming joint).
+    root_links = [n for n in links if n not in child_to_joint]
+    assert len(root_links) == 1, f'Expected single root link in {urdf_path}'
+
+    # Resolve world pose of each link by walking up the chain.
+    base_R = _rpy_to_mat(base_ori_rpy)
+    base_t = np.array(base_pos, dtype=float)
+
+    def link_world_pose(name):
+        if name in child_to_joint:
+            parent, xyz, rpy = child_to_joint[name]
+            pR, pt = link_world_pose(parent)
+            R = pR @ _rpy_to_mat(rpy)
+            t = pt + pR @ (np.array(xyz) * scale)
+            return R, t
+        return base_R, base_t
+
+    frags = []
+    for name, link in links.items():
+        link_R, link_t = link_world_pose(name)
+        for vi, visual in enumerate(link.findall('visual')):
+            origin = visual.find('origin')
+            vxyz = [0, 0, 0]
+            vrpy = [0, 0, 0]
+            if origin is not None:
+                vxyz = [float(v) for v in origin.get('xyz', '0 0 0').split()]
+                vrpy = [float(v) for v in origin.get('rpy', '0 0 0').split()]
+            vR = _rpy_to_mat(vrpy)
+            R = link_R @ vR
+            t = link_t + link_R @ (np.array(vxyz) * scale)
+            quat = _mat_to_quat(R)
+
+            geom = visual.find('geometry')
+            if geom is None:
+                continue
+            cyl = geom.find('cylinder')
+            box = geom.find('box')
+            sph = geom.find('sphere')
+            rgba_str = ''
+            if rgba is not None:
+                rgba_str = f'rgba="{rgba[0]} {rgba[1]} {rgba[2]} {rgba[3]}"'
+            else:
+                mat = visual.find('material/color')
+                if mat is not None:
+                    rgba_str = f'rgba="{mat.get("rgba")}"'
+            pose = (f'pos="{t[0]} {t[1]} {t[2]}" '
+                    f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}"')
+            if cyl is not None:
+                length = float(cyl.get('length')) * scale
+                radius = float(cyl.get('radius')) * scale
+                frags.append(
+                    f'<geom type="cylinder" size="{radius} {length / 2}" '
+                    f'{pose} {rgba_str}/>'
+                )
+            elif box is not None:
+                sz = [float(v) * scale / 2 for v in box.get('size').split()]
+                frags.append(
+                    f'<geom type="box" size="{sz[0]} {sz[1]} {sz[2]}" '
+                    f'{pose} {rgba_str}/>'
+                )
+            elif sph is not None:
+                radius = float(sph.get('radius')) * scale
+                frags.append(
+                    f'<geom type="sphere" size="{radius}" {pose} {rgba_str}/>'
+                )
+    return '\n      '.join(frags)
+
+
 SCENE_NAME_MAP = {
     'hanggarment': 'hangcloth',
     'bgarments': 'hangcloth',
@@ -200,6 +337,26 @@ class DeformEnvMuJoCo(gym.Env):
             f'</flexcomp>'
         )
 
+        # Rigid scene entities (hangers, rods, etc.) from SCENE_INFO.
+        rigid_frags = []
+        scene = SCENE_INFO.get(self.scene_name, {'entities': {}})
+        for rel_path, kw in scene['entities'].items():
+            if not rel_path.endswith('.urdf'):
+                continue  # only URDFs for now
+            urdf_path = os.path.join(self.data_path, rel_path)
+            if not os.path.exists(urdf_path):
+                continue
+            frag = _urdf_to_mjcf_geoms(
+                urdf_path,
+                base_pos=kw['basePosition'],
+                base_ori_rpy=kw.get('baseOrientation', [0, 0, 0]),
+                scale=kw.get('globalScaling', 1.0),
+                rgba=kw.get('rgbaColor'),
+            )
+            if frag:
+                rigid_frags.append(frag)
+        rigid_xml = '\n    '.join(rigid_frags)
+
         xml = f"""
 <mujoco model="dedo_mujoco">
   <option timestep="{self.dt}" integrator="implicitfast" gravity="0 0 {gravity}">
@@ -224,6 +381,7 @@ class DeformEnvMuJoCo(gym.Env):
     <body name="cloth">
       {flexcomp_xml}
     </body>
+    {rigid_xml}
   </worldbody>
 </mujoco>
 """
