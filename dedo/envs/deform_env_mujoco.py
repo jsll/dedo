@@ -298,6 +298,7 @@ class DeformEnvMuJoCo(gym.Env):
         info = DEFORM_INFO[self.deform_obj]
         self.anchor_vertex_ids = [vs[0] for vs in info['deform_anchor_vertices']]
         self.true_loop_vertices = info.get('deform_true_loop_vertices', None)
+        self.fixed_pin_vertex_ids = info.get('deform_fixed_anchor_vertex_ids', [])
 
     def _build_model(self):
         info = DEFORM_INFO[self.deform_obj]
@@ -326,6 +327,10 @@ class DeformEnvMuJoCo(gym.Env):
         anchor_init_pos = self.args.anchor_init_pos
         other_init_pos = self.args.other_anchor_init_pos
 
+        pin_xml = ''
+        if self.fixed_pin_vertex_ids:
+            pin_ids = ' '.join(str(i) for i in self.fixed_pin_vertex_ids)
+            pin_xml = f'<pin id="{pin_ids}"/>'
         flexcomp_xml = (
             f'<flexcomp type="mesh" dim="2" name="cloth" file="{mesh_rel}" '
             f'pos="{init_pos[0]} {init_pos[1]} {init_pos[2]}" '
@@ -334,28 +339,49 @@ class DeformEnvMuJoCo(gym.Env):
             f'<edge equality="true" damping="{damping}"/>'
             f'<contact solref="0.01 1" friction="1.0"/>'
             f'<elasticity young="{young}" poisson="0.0" thickness="5e-3"/>'
+            f'{pin_xml}'
             f'</flexcomp>'
         )
 
-        # Rigid scene entities (hangers, rods, etc.) from SCENE_INFO.
+        # Rigid scene entities (hangers, rods, bags, etc.) from SCENE_INFO.
         rigid_frags = []
+        mesh_assets = []  # list of (asset_name, abs_path)
         scene = SCENE_INFO.get(self.scene_name, {'entities': {}})
         for rel_path, kw in scene['entities'].items():
-            if not rel_path.endswith('.urdf'):
-                continue  # only URDFs for now
-            urdf_path = os.path.join(self.data_path, rel_path)
-            if not os.path.exists(urdf_path):
+            full = os.path.join(self.data_path, rel_path)
+            if not os.path.exists(full):
                 continue
-            frag = _urdf_to_mjcf_geoms(
-                urdf_path,
-                base_pos=kw['basePosition'],
-                base_ori_rpy=kw.get('baseOrientation', [0, 0, 0]),
-                scale=kw.get('globalScaling', 1.0),
-                rgba=kw.get('rgbaColor'),
-            )
-            if frag:
-                rigid_frags.append(frag)
+            if rel_path.endswith('.urdf'):
+                frag = _urdf_to_mjcf_geoms(
+                    full,
+                    base_pos=kw['basePosition'],
+                    base_ori_rpy=kw.get('baseOrientation', [0, 0, 0]),
+                    scale=kw.get('globalScaling', 1.0),
+                    rgba=kw.get('rgbaColor'),
+                )
+                if frag:
+                    rigid_frags.append(frag)
+            elif rel_path.endswith('.obj'):
+                asset_name = 'rigid_' + os.path.splitext(
+                    os.path.basename(rel_path))[0]
+                mesh_assets.append((asset_name, full,
+                                    kw.get('globalScaling', 1.0)))
+                quat = _euler_to_quat(kw.get('baseOrientation', [0, 0, 0]))
+                bp = kw['basePosition']
+                rgba = kw.get('rgbaColor')
+                rgba_str = (f'rgba="{rgba[0]} {rgba[1]} {rgba[2]} {rgba[3]}"'
+                            if rgba is not None else '')
+                rigid_frags.append(
+                    f'<geom type="mesh" mesh="{asset_name}" '
+                    f'pos="{bp[0]} {bp[1]} {bp[2]}" '
+                    f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}" '
+                    f'{rgba_str}/>'
+                )
         rigid_xml = '\n    '.join(rigid_frags)
+        mesh_asset_xml = '\n    '.join(
+            f'<mesh name="{n}" file="{p}" scale="{s} {s} {s}"/>'
+            for n, p, s in mesh_assets
+        )
 
         xml = f"""
 <mujoco model="dedo_mujoco">
@@ -363,6 +389,9 @@ class DeformEnvMuJoCo(gym.Env):
     <flag multiccd="enable"/>
   </option>
   <compiler meshdir="{meshdir}" angle="radian"/>
+  <asset>
+    {mesh_asset_xml}
+  </asset>
   <equality>
     <connect name="mocap_connect_0" body1="mocap_0" body2="cloth_{self.anchor_vertex_ids[0]}"
              anchor="0 0 0" solref="0.01 1" solimp=".95 .99 0.001" active="true"/>
