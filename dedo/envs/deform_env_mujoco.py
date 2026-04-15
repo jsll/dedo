@@ -279,9 +279,22 @@ class DeformEnvMuJoCo(gym.Env):
             np.concatenate([self.WORKSPACE_BOX_SIZE * np.ones(3), np.ones(3)]),
             self.num_anchors,
         )
-        self.observation_space = gym.spaces.Box(
-            -1.0 * self.gripper_lims, self.gripper_lims, dtype=np.float32
-        )
+        self.cam_on = args.cam_resolution > 0
+        if not self.cam_on:
+            self.observation_space = gym.spaces.Box(
+                -1.0 * self.gripper_lims, self.gripper_lims, dtype=np.float32
+            )
+        else:
+            shape = (args.cam_resolution, args.cam_resolution, 3)
+            if args.flat_obs:
+                shape = (int(np.prod(shape)),)
+            self.observation_space = gym.spaces.Box(
+                low=0, high=255 if args.uint8_pixels else 1.0,
+                dtype=np.uint8 if args.uint8_pixels else np.float16,
+                shape=shape,
+            )
+        self._renderer = None
+        self._render_cam = None
         self.action_space = gym.spaces.Box(
             -np.ones(self.num_anchors * 3, dtype=np.float32),
             np.ones(self.num_anchors * 3, dtype=np.float32),
@@ -485,7 +498,9 @@ class DeformEnvMuJoCo(gym.Env):
             from mujoco import viewer as _mj_viewer
             self.viewer = _mj_viewer.launch_passive(self.model, self.data)
         obs, _ = self._get_obs()
-        return obs.astype(np.float32), {}
+        if not self.cam_on:
+            obs = obs.astype(np.float32)
+        return obs, {}
 
     def step(self, action, unscaled=False):
         action = np.asarray(action, dtype=np.float64).reshape(self.num_anchors, 3)
@@ -519,24 +534,59 @@ class DeformEnvMuJoCo(gym.Env):
             info['final_reward'] = reward
         self.episode_reward += reward
         self.stepnum += 1
-        return obs.astype(np.float32), float(reward), bool(terminated), bool(truncated), info
+        if not self.cam_on:
+            obs = obs.astype(np.float32)
+        return obs, float(reward), bool(terminated), bool(truncated), info
 
     def close(self):
         if self.viewer is not None:
             self.viewer.close()
             self.viewer = None
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
 
     # ---- internals -----------------------------------------------------
-    def _get_obs(self):
+    def _grip_obs(self):
         anc = []
         for i in range(self.num_anchors):
             pos = self.data.mocap_pos[self._mocap_idx[i]]
             anc.extend(pos.tolist())
             anc.extend((self._mocap_vel[i] / self.MAX_OBS_VEL).tolist())
-        obs = np.nan_to_num(np.array(anc))
-        terminated = bool((np.abs(obs) > self.gripper_lims).any())
-        if terminated:
-            obs = np.clip(obs, -self.gripper_lims, self.gripper_lims)
+        return np.nan_to_num(np.array(anc))
+
+    def _ensure_renderer(self):
+        if self._renderer is not None:
+            return
+        res = int(self.args.cam_resolution)
+        self._renderer = mujoco.Renderer(self.model, height=res, width=res)
+        cam = mujoco.MjvCamera()
+        mujoco.mjv_defaultCamera(cam)
+        dist, pitch, yaw, px, py, pz = self.args.cam_viewmat
+        cam.distance = float(dist)
+        cam.elevation = float(pitch)  # dedo convention; pitch negative looks down
+        cam.azimuth = float(yaw)
+        cam.lookat[:] = [float(px), float(py), float(pz)]
+        self._render_cam = cam
+
+    def _render_rgb(self):
+        self._ensure_renderer()
+        self._renderer.update_scene(self.data, camera=self._render_cam)
+        return self._renderer.render()  # HxWx3 uint8
+
+    def _get_obs(self):
+        grip = self._grip_obs()
+        terminated = bool((np.abs(grip) > self.gripper_lims).any())
+        if not self.cam_on:
+            obs = np.clip(grip, -self.gripper_lims, self.gripper_lims) if terminated else grip
+            return obs, terminated
+        img = self._render_rgb()  # uint8 [0,255]
+        if self.args.uint8_pixels:
+            obs = img.astype(np.uint8)
+        else:
+            obs = np.clip(img.astype(np.float32) / 255.0, 0, 1).astype(np.float16)
+        if self.args.flat_obs:
+            obs = obs.reshape(-1)
         return obs, terminated
 
     def _vertex_positions(self):
