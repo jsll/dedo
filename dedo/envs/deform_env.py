@@ -292,6 +292,8 @@ class DeformEnv(gym.Env):
         reset_bullet(self.args, self.sim, plane_texture=plane_texture_path)
         res = self.load_objects(self.sim, self.args, self.args.debug)
         self.rigid_ids, self.deform_id, self.deform_obj, self.goal_pos = res
+        load_floor(self.sim, plane_texture=plane_texture_path,
+                   debug=self.args.debug)
 
         # Special case for Procedural Cloth tasks that can have two holes:
         # reward is based on the closest hole.
