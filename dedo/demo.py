@@ -89,7 +89,10 @@ def play(env, num_episodes, args):
                 break
             obs = next_obs
             step += 1
-        input('Episode ended; press enter to go on')
+        try:
+            input('Episode ended; press enter to go on')
+        except EOFError:
+            pass
 
         if args.pcd:
             render_video(f'{args.logdir}/pcd', f'{args.logdir}/pcd_test.mp4')

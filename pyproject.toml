@@ -40,6 +40,11 @@ packages = ["dedo"]
 [tool.hatch.build.targets.sdist]
 include = ["dedo", "README.md", "LICENSE"]
 
+[tool.uv]
+# pybullet must be built with numpy available; disable build isolation so it
+# finds the already-installed numpy instead of using a bare build environment.
+no-build-isolation-package = ["pybullet"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

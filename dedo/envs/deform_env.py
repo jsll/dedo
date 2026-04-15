@@ -313,7 +313,10 @@ class DeformEnv(gym.Env):
             self.sim.stepSimulation()  # step once to get initial state
             self.sim.configureDebugVisualizer(pybullet.COV_ENABLE_RENDERING, 1)
             if debug_mrks is not None:
-                input('Visualized true loops; press ENTER to continue')
+                try:
+                    input('Visualized true loops; press ENTER to continue')
+                except EOFError:
+                    pass
                 for mrk_id in debug_mrks:
                     # removeBody doesn't seem to work, so just make invisible
                     self.sim.changeVisualShape(mrk_id, -1,
