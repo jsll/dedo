@@ -93,14 +93,14 @@ def load_deform_object(sim, obj_file_name, texture_file_name,
         springDampingStiffness=damping_stiffness,
         springBendingStiffness=bending_stiffness,
         frictionCoeff=friction_coeff,
-        # collisionMargin=0.003,  # how far apart do two objects begin interacting
+        collisionMargin=0.006,  # how far apart do two objects begin interacting
         useSelfCollision=self_collision,
         springDampingAllDirections=1,
         useFaceContact=True,
         useNeoHookean=0,
         useMassSpring=True,
         useBendingSprings=True,
-        # repulsionStiffness=10000000,
+        repulsionStiffness=800,
     )
     # PyBullet examples for loading and anchoring deformables:
     # github.com/bulletphysics/bullet3/examples/pybullet/examples/deformable_anchor.py
