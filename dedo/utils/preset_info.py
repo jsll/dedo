@@ -5,8 +5,7 @@ Waypoints for preset trajectories.
 
 """
 
-from .task_info import (
-    MESH_MAJOR_VERSIONS, TOTE_MAJOR_VERSIONS, TOTE_VARS_PER_VERSION)
+from .task_info import MESH_MAJOR_VERSIONS, TOTE_MAJOR_VERSIONS, TOTE_VARS_PER_VERSION
 
 preset_traj = {
     'cloth/apron_0.obj': {  # HangGarment-v0, 600 steps

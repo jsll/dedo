@@ -12,17 +12,18 @@ add further comments, unify the style, improve efficiency and add unittests.
 @contactrika
 
 """
-import matplotlib.pyplot as plt
 import os
+
+import matplotlib.pyplot as plt
 from matplotlib import interactive
 
 interactive(True)
+import gym
 import numpy as np
 
-import gym
-
 from dedo.utils.args import get_args
-from dedo.utils.pcd_utils import visualize_data, render_video
+from dedo.utils.pcd_utils import render_video, visualize_data
+
 
 def policy_simple(obs, act, task, step):
     """A very simple default policy."""
@@ -86,9 +87,9 @@ def play(env, num_episodes, args):
             obs = next_obs
             step += 1
         input('Episode ended; press enter to go on')
-        
+
         if args.pcd:
-            render_video(f'{args.logdir}/pcd', f'{args.logdir}/pcd_test.mp4')            
+            render_video(f'{args.logdir}/pcd', f'{args.logdir}/pcd_test.mp4')
 
         env.close()
 

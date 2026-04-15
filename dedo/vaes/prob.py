@@ -8,6 +8,7 @@
 # @contactrika
 #
 import math
+
 import torch
 
 LOGVAR_LIMIT = 10  # STD = sqrt(exp(-10)) = 0.0067  # avoid variance collapse
@@ -24,7 +25,7 @@ def get_log_lik(tgt_xs, recon_xs, lp=2):
     return log_lik
 
 
-class GaussianDiagDistr(object):
+class GaussianDiagDistr:
     """
     Multivariate Gaussian with diagonal covariance.
     Sigma_{ii} = exp(logvar[i])
@@ -40,7 +41,7 @@ class GaussianDiagDistr(object):
     and provides kl_from_sandard_normal()
     """
     def __init__(self, mu, logvar, logvar_limit=LOGVAR_LIMIT):
-        super(GaussianDiagDistr, self).__init__()
+        super().__init__()
         self.mu = mu
         # Sigma_{ii} = exp(logvar[i])
         # i.e. logvar holds logs of diagonal entries of the covariance matrix

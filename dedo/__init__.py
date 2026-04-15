@@ -1,11 +1,10 @@
-from pathlib import Path  # automatically converts forward slashes if needed
 import os
+from pathlib import Path  # automatically converts forward slashes if needed
 
 from gym.envs.registration import register
-from .envs.deform_env import DeformEnv
-from .utils.task_info import (
-    TASK_INFO, TOTE_MAJOR_VERSIONS, TOTE_VARS_PER_VERSION, DEFORM_INFO)
 
+from .envs.deform_env import DeformEnv
+from .utils.task_info import DEFORM_INFO, TASK_INFO, TOTE_MAJOR_VERSIONS, TOTE_VARS_PER_VERSION
 
 bp = os.path.dirname(__file__)
 sewing_dir = Path(bp, 'data/sewing/')

@@ -13,26 +13,39 @@ add further comments, unify the style, improve efficiency and add unittests.
 import os
 import time
 
-from matplotlib import cm  # for colors
-import numpy as np
 import gym
+import numpy as np
 import pybullet
 import pybullet_utils.bullet_client as bclient
+from matplotlib import cm  # for colors
 
 from ..utils.anchor_utils import (
-    attach_anchor, command_anchor_velocity, create_anchor, create_anchor_geom,
-    pin_fixed, change_anchor_color_gray)
-from ..utils.init_utils import (
-    load_deform_object, load_rigid_object, reset_bullet, load_deformable, 
-    load_floor, get_preset_properties)
-from ..utils.mesh_utils import get_mesh_data
-from ..utils.task_info import (
-    DEFAULT_CAM_PROJECTION, DEFORM_INFO, SCENE_INFO, TASK_INFO,
-    TOTE_MAJOR_VERSIONS, TOTE_VARS_PER_VERSION)
-from ..utils.procedural_utils import (
-    gen_procedural_hang_cloth, gen_procedural_button_cloth)
+    attach_anchor,
+    change_anchor_color_gray,
+    command_anchor_velocity,
+    create_anchor,
+    create_anchor_geom,
+    pin_fixed,
+)
 from ..utils.args import preset_override_util
+from ..utils.init_utils import (
+    get_preset_properties,
+    load_deform_object,
+    load_floor,
+    load_rigid_object,
+    reset_bullet,
+)
+from ..utils.mesh_utils import get_mesh_data
+from ..utils.procedural_utils import gen_procedural_button_cloth, gen_procedural_hang_cloth
 from ..utils.process_camera import ProcessCamera, cameraConfig
+from ..utils.task_info import (
+    DEFAULT_CAM_PROJECTION,
+    DEFORM_INFO,
+    SCENE_INFO,
+    TASK_INFO,
+    TOTE_MAJOR_VERSIONS,
+    TOTE_VARS_PER_VERSION,
+)
 
 
 class DeformEnv(gym.Env):
@@ -381,7 +394,7 @@ class DeformEnv(gym.Env):
             print(f'step {self.stepnum:d} reward {reward:0.4f}')
             if done:
                 print(f'episode reward {self.episode_reward:0.4f}')
-            
+
         self.stepnum += 1
 
         return next_obs, reward, done, info
@@ -447,8 +460,8 @@ class DeformEnv(gym.Env):
                'ids': segmented_ids
               }
 
-        return obs 
-    
+        return obs
+
     def get_obs(self):
         grip_obs = self.get_grip_obs()
         done = False
@@ -486,7 +499,7 @@ class DeformEnv(gym.Env):
                 self.anchor_ids[i])
             linvel, _ = self.sim.getBaseVelocity(self.anchor_ids[i])
             anc_obs.extend(pos)
-            anc_obs.extend((np.array(linvel)/DeformEnv.MAX_OBS_VEL))
+            anc_obs.extend(np.array(linvel)/DeformEnv.MAX_OBS_VEL)
         return anc_obs
 
     def get_reward(self):

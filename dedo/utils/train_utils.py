@@ -9,11 +9,11 @@ add further comments, unify the style, improve efficiency and add unittests.
 @contactrika
 
 """
-from datetime import datetime
-import numpy as np
-
 import os
 import platform
+from datetime import datetime
+
+import numpy as np
 import torch
 import wandb
 
@@ -23,8 +23,7 @@ def object_to_str(obj):
     text_str = ''
     for member in vars(obj):
         # Tensorboard uses markdown-like formatting, hence '  \n'.
-        text_str += '  \n{:s}={:s}'.format(
-            str(member), str(getattr(obj, member)))
+        text_str += f'  \n{str(member):s}={str(getattr(obj, member)):s}'
     return text_str
 
 
@@ -44,7 +43,7 @@ def init_train(algo, args, tags=None):
             wandb.init(sync_tensorboard=False)
             try:  # patch only once, if more than one run, ignore error
                 wandb.tensorboard.patch(tensorboardX=True, pytorch=True)
-            except ValueError as e:
+            except ValueError:
                 pass
     device = args.device
     if not torch.cuda.is_available():

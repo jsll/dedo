@@ -19,7 +19,7 @@ class ConvStack(nn.Module):
     IMAGE_SIZES = [64, 128, 256, 512]
 
     def __init__(self, pr):
-        super(ConvStack, self).__init__()
+        super().__init__()
         self.debug = pr.debug
         # Note: Conv2d(3, 64, 4, 2, 1) means num input channels/filters is 3,
         # num output channels/filters is 64. 3rd arg specifies that kernel size
@@ -82,7 +82,7 @@ class ConvDecoder(nn.Module):
     p(x_{1:T}, z_{1:T}) = prod_{t=1}^T p(z_t | z_{t-1}) p(x_t | z_t).
     """
     def __init__(self, pr, in_sz):
-        super(ConvDecoder, self).__init__()
+        super().__init__()
         self.debug = pr.debug
         nflt = pr.conv_nfilters
         # https://discuss.pytorch.org/t/pytorch-equivalent-of-tensorflow-conv2d-transpose-filter-tensor/16853/3
@@ -132,7 +132,7 @@ class EncoderDynamic(nn.Module):
     Yields q_(z_{1:L} | x_feat_{1:T}, a_{1:L}), L>T
     """
     def __init__(self, pr, latent_sz):
-        super(EncoderDynamic, self).__init__()
+        super().__init__()
         self.in_seq_len = pr.hist
         self.out_seq_len = pr.past+pr.pred
         self.mu_nl = pr.mu_nl
@@ -170,7 +170,7 @@ class EncoderDynamicRNN(nn.Module):
     Yields q_(z_{1:T} | x_{1:T})
     """
     def __init__(self, pr, latent_sz, nolstm=True):
-        super(EncoderDynamicRNN, self).__init__()
+        super().__init__()
         # batch_first is set to True, so that the input and output tensors
         # have sizes [batch_size, seq_len, data_size].
         # Size of LSTM input is: size of each conv(x_t).

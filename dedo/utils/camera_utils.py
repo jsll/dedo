@@ -4,6 +4,7 @@
 #
 
 import json
+
 import numpy as np
 
 
@@ -29,14 +30,14 @@ def get_camera_config(sim):
     return camera_config
 
 
-class cameraConfig():
-    def __init__(self, view_matrix:np.ndarray, 
-                       proj_matrix:np.ndarray, 
-                       cam_forward:np.ndarray, 
-                       cam_horiz:np.ndarray, 
-                       cam_vert:np.ndarray, 
-                       cam_dist:float, 
-                       cam_tgt:np.ndarray, 
+class cameraConfig:
+    def __init__(self, view_matrix:np.ndarray,
+                       proj_matrix:np.ndarray,
+                       cam_forward:np.ndarray,
+                       cam_horiz:np.ndarray,
+                       cam_vert:np.ndarray,
+                       cam_dist:float,
+                       cam_tgt:np.ndarray,
                        file_location:str='') -> None:
         """ Initialize a camera config object w/ values"""
 
@@ -53,9 +54,9 @@ class cameraConfig():
     @classmethod
     def from_file(cls, file):
 
-        with open(file, "r") as f:
+        with open(file) as f:
             config = json.load(f)
-            
+
         view_matrix = np.asarray(config['view_matrix'])
         proj_matrix = np.asarray(config['proj_matrix'])
         cam_forward = np.asarray(config['cam_forward'])
@@ -63,9 +64,9 @@ class cameraConfig():
         cam_vert = np.asarray(config['cam_vert'])
         cam_dist = config['cam_dist']
         cam_tgt = np.asarray(config['cam_tgt'])
-        
+
         # Construct class object
-        cfg = cls(view_matrix, proj_matrix, cam_forward, cam_horiz, cam_vert, 
+        cfg = cls(view_matrix, proj_matrix, cam_forward, cam_horiz, cam_vert,
                         cam_dist, cam_tgt, file_location=file)
 
         return cfg
@@ -75,7 +76,7 @@ class cameraConfig():
 
 
     def __repr__(self):
-        return f'[view_matrix, proj_matrix, cam_forward, cam_horiz, cam_vert, \
+        return '[view_matrix, proj_matrix, cam_forward, cam_horiz, cam_vert, \
                   cam_dist, cam_tgt]' + '\n' + \
                f'[ {self.view_matrix} , {self.proj_matrix} , {self.cam_forward}\
                 , {self.cam_horiz} , {self.cam_vert} , {self.cam_dist}\

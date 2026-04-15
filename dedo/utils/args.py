@@ -10,11 +10,12 @@ add further comments, unify the style, improve efficiency and add unittests.
 
 """
 import argparse
-
-import sys
-from .task_info import TASK_INFO
-import re
 import os
+import re
+import sys
+
+from .task_info import TASK_INFO
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser(description='args', add_help=True)
@@ -165,7 +166,7 @@ def args_postprocess(args):
         if args.version > len(TASK_INFO[args.task]):
             print('env version too high')
             exit(1)
-    # Handling pcd rendering 
+    # Handling pcd rendering
     if args.pcd:
         assert args.logdir is not None, "Need to specify a logdir for pcd."
         os.makedirs(args.logdir, exist_ok=True)

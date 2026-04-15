@@ -9,10 +9,10 @@ add further comments, unify the style, improve efficiency and add unittests.
 @contactrika
 
 """
+import os
 from pathlib import Path  # automatically converts forward slashes if needed
 
 import numpy as np
-import os
 import pybullet
 import pybullet_data
 

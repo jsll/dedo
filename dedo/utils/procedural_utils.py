@@ -17,6 +17,7 @@ add further comments, unify the style, improve efficiency and add unittests.
 """
 
 import os
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -193,7 +194,7 @@ def try_gen_holes(node_density, num_holes, constraints):
             if boundary_constraint(node_density, hole):
                 return [hole]
         else:
-            raise NotImplemented('num_holes > 2 is not implemented yet')
+            raise NotImplementedError('num_holes > 2 is not implemented yet')
     print('Failed to generate hole according to constraint')
 
 
@@ -263,7 +264,7 @@ def create_cloth_obj(min_point, max_point, node_density,
         if os.path.isfile(obj_path):
             print("Cloth obj file already exists, skipping mesh creation.")
             anchor_indices = []
-            with open(obj_path, 'r') as f:
+            with open(obj_path) as f:
                 words = f.readline().split()
                 anchor_indices = (int(words[1]), int(words[2]))
                 f.close()

@@ -28,8 +28,7 @@ import os
 import ray
 
 from dedo.utils.args import get_args
-from dedo.utils.rllib_utils import (
-    deform_env_creator, get_agent_trainer, make_rl_config, play)
+from dedo.utils.rllib_utils import deform_env_creator, get_agent_trainer, make_rl_config, play
 from dedo.utils.train_utils import init_train
 
 

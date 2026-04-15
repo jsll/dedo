@@ -17,22 +17,19 @@ add further comments, unify the style, improve efficiency and add unittests.
 @contactrika
 
 """
-from copy import deepcopy
 import os
 import pickle
+from copy import deepcopy
 from pathlib import Path
 
 import gym
-from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3  # used dynamically
-from stable_baselines3.common.env_util import (
-    make_vec_env, DummyVecEnv, SubprocVecEnv)
+import numpy as np
+import torch
+from stable_baselines3.common.env_util import DummyVecEnv, SubprocVecEnv, make_vec_env
 
 from dedo.utils.args import get_args
 from dedo.utils.rl_sb3_utils import CustomCallback, play
 from dedo.utils.train_utils import init_train
-
-import numpy as np
-import torch
 
 
 def do_play(args, num_episodes=1):

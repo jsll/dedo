@@ -14,7 +14,6 @@ import pickle
 
 import cv2
 import torch
-
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.logger import Video
@@ -68,7 +67,7 @@ class CustomCallback(BaseCallback):
 
     def __init__(self, eval_env, logdir, num_train_envs, args,
                  num_steps_between_save=10000, viz=False, debug=False):
-        super(CustomCallback, self).__init__(debug)
+        super().__init__(debug)
         # Those variables will be accessible in the callback
         # (they are defined in the base class)
         # The RL model

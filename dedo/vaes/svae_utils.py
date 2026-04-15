@@ -12,7 +12,7 @@ add further comments, unify the style, improve efficiency and add unittests.
 import torch
 
 
-class SVAEParams():
+class SVAEParams:
     def __init__(self, hidden_size=512, dynamic_size=32,
                  hist=16, past=4, pred=8, logvar_limit=6,
                  mu_nl=torch.nn.Sigmoid(), conv_nflt=64, debug=False):
@@ -68,7 +68,7 @@ def extract_tgts(x_1toL, act_1toL, hist, past, pred):
 
 
 def do_logging(epoch, debug_dict, debug_hist_dict, tb_writer, title_prefix):
-    dbg_str = title_prefix+' epoch {:d}'.format(epoch)
+    dbg_str = title_prefix+f' epoch {epoch:d}'
     if 'recon_log_lik' in debug_dict.keys():
         dbg_str += ' recon_log_lik: {:.4f}'.format(debug_dict['recon_log_lik'])
     print(dbg_str)

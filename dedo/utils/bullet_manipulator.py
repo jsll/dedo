@@ -9,14 +9,9 @@ add further comments, unify the style, improve efficiency and add unittests.
 @contactrika
 
 """
-from copy import copy
 import os
-import time
 
 import numpy as np
-
-import pybullet_utils.bullet_client as bclient
-import pybullet_data
 import pybullet
 
 
@@ -100,7 +95,7 @@ class BulletManipulator:
             base_pos=base_pos, base_quat=base_quat,
             use_fixed_base=use_fixed_base,
             global_scaling=global_scaling)
-        
+
         # Create a constraint for the mobile manipulator to stay on the floor.
         # Note this constraint is not as rigid as using use_fixed_base while
         # loading, but it looks okay to keep balance of the platform and could
@@ -526,14 +521,14 @@ class BulletManipulator:
 
         inv_trans, inv_rot = self.sim.invertTransform(
         base_pos, base_quat)
-        
+
         quat_input = (0, 0, 0, 1) if quat is None else quat
-        
+
         local_pos, local_quat = self.sim.multiplyTransforms(
             inv_trans, inv_rot, pos, quat_input)
 
         return np.array(local_pos), None if quat is None else np.array(local_quat)
-    
+
     def move_base(self, lin_vel, rot_vel, dt=1./240):
         # Change fixed constraint spec to move the base: assuming the mobile
         # base is omnidirectional, we can also animate differential drive by

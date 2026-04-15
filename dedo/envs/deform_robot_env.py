@@ -21,7 +21,6 @@ from ..utils.bullet_manipulator import BulletManipulator
 from ..utils.init_utils import get_preset_properties
 from ..utils.mesh_utils import get_mesh_data
 from ..utils.task_info import DEFORM_INFO, ROBOT_INFO
-
 from .deform_env import DeformEnv
 
 
@@ -30,7 +29,7 @@ class DeformRobotEnv(DeformEnv):
     FING_DIST = 0.01  # default finger distance
 
     def __init__(self, args):
-        super(DeformRobotEnv, self).__init__(args)
+        super().__init__(args)
         act_sz = 3
         if self.food_packing:
             act_sz += DeformRobotEnv.ORI_SIZE
@@ -47,7 +46,7 @@ class DeformRobotEnv(DeformEnv):
         return act * DeformEnv.WORKSPACE_BOX_SIZE
 
     def load_objects(self, sim, args, debug):
-        res = super(DeformRobotEnv, self).load_objects(sim, args, debug)
+        res = super().load_objects(sim, args, debug)
         data_path = os.path.join(os.path.split(__file__)[0], '..', 'data')
         sim.setAdditionalSearchPath(data_path)
         robot_info = ROBOT_INFO.get(f'franka{self.num_anchors:d}', None)
@@ -144,12 +143,12 @@ class DeformRobotEnv(DeformEnv):
         grip_obs = []
         ee_pos, _, ee_linvel, _ = self.robot.get_ee_pos_ori_vel()
         grip_obs.extend(ee_pos)
-        grip_obs.extend((np.array(ee_linvel) / DeformEnv.MAX_OBS_VEL))
+        grip_obs.extend(np.array(ee_linvel) / DeformEnv.MAX_OBS_VEL)
         if self.num_anchors > 1:  # EE pos, vel of left arm
             left_ee_pos, _, left_ee_linvel, _ = \
                 self.robot.get_ee_pos_ori_vel(left=True)
             grip_obs.extend(left_ee_pos)
-            grip_obs.extend((np.array(left_ee_linvel) / DeformEnv.MAX_OBS_VEL))
+            grip_obs.extend(np.array(left_ee_linvel) / DeformEnv.MAX_OBS_VEL)
 
         return grip_obs
 
@@ -157,7 +156,7 @@ class DeformRobotEnv(DeformEnv):
         if self.food_packing:
             return self.get_food_packing_reward()
         else:
-            return super(DeformRobotEnv, self).get_reward()
+            return super().get_reward()
 
     def get_food_packing_reward(self):
         _, vertex_positions = get_mesh_data(self.sim, self.deform_id)

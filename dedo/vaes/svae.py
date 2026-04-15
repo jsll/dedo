@@ -12,15 +12,16 @@ add further comments, unify the style, improve efficiency and add unittests.
 import torch
 import torch.nn as nn
 
-from . import svae_utils  # used dynamically
-from . import nets
-from .svae_utils import extract_tgts
+from . import (
+    nets,  # used dynamically
+)
 from .prob import get_log_lik
+from .svae_utils import extract_tgts
 
 
 class SVAE(nn.Module):
     def __init__(self, im_sz, act_sz, params_class, device):
-        super(SVAE, self).__init__()
+        super().__init__()
         pr = eval('svae_utils.' + params_class)
         pr.im_sz = im_sz
         pr.act_sz = act_sz

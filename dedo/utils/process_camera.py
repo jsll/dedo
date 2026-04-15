@@ -1,30 +1,32 @@
 # Process depth and RGB camera input from PyBullet.
 #
 # @contactrika
-# 
+#
 # Updated pcd generation is vectorized & camera config now loads from json
 #
 #  @edwin-pan
 
 import os
-import sys
-import math
 import time
+
 import matplotlib.pyplot as plt
 import numpy as np
+
 np.set_printoptions(precision=4, linewidth=150, threshold=np.inf, suppress=True)
 
-import pybullet
 from typing import Optional
 
+import pybullet
+
 from .camera_utils import cameraConfig
+
 
 def assert_close(ars, ars0):
     for ar, ar0 in zip(ars, ars0):
         assert(np.linalg.norm(np.array(ar)-np.array(ar0))<1e-6)
 
 
-class ProcessCamera():
+class ProcessCamera:
     # In non-GUI mode we will render without X11 context but *with* GPU accel.
     # examples/pybullet/examples/testrender_egl.py
     # Note: use alpha=1 (in rgba), otherwise depth readings are not good
@@ -40,7 +42,7 @@ class ProcessCamera():
     # ATTENTION: CAM_VALS *HAVE* TO BE UPDATED IF CAM_YAWS, CAM_PITCHES,
     # CAM_DIST, or CAM_TGT_POS is changed.
     CAM_YAWS = list(range(-30,211,40)) # [-30, 0, ..., 170, 210]
-    CAM_PITCHES = [-70, -10, -65, -40, -10, -25, -60]   
+    CAM_PITCHES = [-70, -10, -65, -40, -10, -25, -60]
 
     def make_pcd(obs:np.ndarray, config:cameraConfig,
                  segment_mask:np.ndarray=None, object_ids:list=None) -> np.ndarray:
@@ -99,7 +101,7 @@ class ProcessCamera():
 
         height, width = obs.shape
 
-        # convert to world space coordinates 
+        # convert to world space coordinates
         # -- ortho
         constant = vertical/2-horizontal/2
         A_ortho = np.vstack([horizontal/width, -vertical/height, np.zeros(3), constant]).T
@@ -108,20 +110,19 @@ class ProcessCamera():
         vec_v = (ortho_v.T + ray_forward).T
         # -- alpha
         alpha_v = np.arctan(np.linalg.norm(ortho_v, axis=0)/far_plane)
-        # -- depth 
+        # -- depth
         depth_v = far_val*near_val/(far_val-(far_val-near_val)*input_homogeneous[2])
         # -- res
         res_v = (depth_v/np.cos(alpha_v))*(vec_v/np.linalg.norm(vec_v, axis=0))
         # -- pcd
         pcd = cam_pos + res_v.T
-        
+
         return pcd, ids
 
 
     @staticmethod
     def draw_point_clouds_from_file(fname_pfx, max_num_pts=None):
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d.axes3d import Axes3D
         draw_every = 1; max_steps = 10000
         cmap = plt.cm.jet
         cmaplist = [cmap(i) for i in range(cmap.N)]
@@ -156,7 +157,7 @@ class ProcessCamera():
 
 
     def render(sim, config:cameraConfig, width:int=100, height:int=100,
-                object_ids:Optional[list]=None, return_rgb:bool=False, 
+                object_ids:Optional[list]=None, return_rgb:bool=False,
                 retain_unknowns:bool=False, debug:bool=False) -> np.ndarray:
         """ Produce pointcloud data from depth image. 
         
@@ -199,8 +200,8 @@ class ProcessCamera():
 
         pcd, ids = ProcessCamera.make_pcd(depth_raw_cam_dists, config=config, object_ids=object_ids, segment_mask=segment_mask)
 
-        if debug: print('make_pcd took {:4f}'.format(time.time()-tic))
-        
+        if debug: print(f'make_pcd took {time.time()-tic:4f}')
+
         if return_rgb:
             return pcd, ids, rgba_px
         else:

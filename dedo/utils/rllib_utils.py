@@ -18,10 +18,9 @@ add further comments, unify the style, improve efficiency and add unittests.
 import glob
 import os
 
+from ray.rllib.agents.ddpg import apex, td3
 from ray.rllib.agents.registry import get_agent_class
 from ray.rllib.rollout import rollout
-from ray.rllib.agents import a3c, impala, sac, ppo  # used dynamically
-from ray.rllib.agents.ddpg import apex, td3
 
 from dedo.envs.deform_env import DeformEnv
 
@@ -29,7 +28,7 @@ from dedo.envs.deform_env import DeformEnv
 class RllibDeformBulletEnv(DeformEnv):
     # ray.readthedocs.io/en/latest/rllib-env.html
     def __init__(self, env_config):
-        super(RllibDeformBulletEnv, self).__init__(**env_config)
+        super().__init__(**env_config)
 
 
 def deform_env_creator(env_config):

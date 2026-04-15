@@ -16,17 +16,14 @@ add further comments, unify the style, improve efficiency and add unittests.
 """
 from copy import deepcopy
 
-import gym
 import numpy as np
-from stable_baselines3.common.env_util import (
-    make_vec_env, DummyVecEnv, SubprocVecEnv)
-from tensorboardX import SummaryWriter
 import torch
+from stable_baselines3.common.env_util import DummyVecEnv, SubprocVecEnv, make_vec_env
+from tensorboardX import SummaryWriter
 
 from dedo.utils.args import get_args
 from dedo.utils.train_utils import init_train, object_to_str
 from dedo.vaes.nets import ConvStack
-from dedo.vaes.svae import SVAE  # used dynamically
 from dedo.vaes.svae_utils import do_logging, fill_seq_bufs_from_rollouts
 from dedo.vaes.svae_viz import viz_samples
 

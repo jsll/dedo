@@ -12,11 +12,10 @@ add further comments, unify the style, improve efficiency and add unittests.
 
 import numpy as np
 import torch
+from PIL import Image, ImageDraw
 
-from .svae_utils import extract_tgts
 from .prob import get_log_lik
-
-from PIL import Image, ImageDraw, ImageFont
+from .svae_utils import extract_tgts
 
 
 def make_border(img, clr_top, clr_left):
