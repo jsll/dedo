@@ -56,6 +56,9 @@ def get_args_parser():
                         help='Whether to visualize')
     parser.add_argument('--debug', action='store_true',
                         help='Whether to print debug info')
+    parser.add_argument('--backend', type=str, default='pybullet',
+                        choices=['pybullet', 'mujoco'],
+                        help='Physics backend (mujoco port: HangGarment slice).')
     #
     # Simulation args. Note: turn up frequency when deform stiffness is high.
     parser.add_argument('--sim_gravity', type=float, default=-9.8,

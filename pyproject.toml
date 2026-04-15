@@ -27,6 +27,9 @@ dependencies = [
 
 [project.optional-dependencies]
 rllib = ["ray[rllib]"]
+mujoco = [
+    "mujoco>=3.2",
+]
 
 [dependency-groups]
 dev = [
