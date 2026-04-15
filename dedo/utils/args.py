@@ -59,6 +59,17 @@ def get_args_parser():
     parser.add_argument('--backend', type=str, default='pybullet',
                         choices=['pybullet', 'mujoco'],
                         help='Physics backend (mujoco port: HangGarment slice).')
+    # MuJoCo flexcomp tuning (ignored when --backend=pybullet).
+    parser.add_argument('--mj_young', type=float, default=None,
+                        help='flexcomp <elasticity young=...>')
+    parser.add_argument('--mj_thickness', type=float, default=None,
+                        help='flexcomp <elasticity thickness=...>')
+    parser.add_argument('--mj_mass', type=float, default=None,
+                        help='flexcomp mass= attr (kg total)')
+    parser.add_argument('--mj_radius', type=float, default=None,
+                        help='flexcomp radius= attr (vertex inflate/render size)')
+    parser.add_argument('--mj_edge_damping', type=float, default=None,
+                        help='flexcomp <edge damping=...>')
     #
     # Simulation args. Note: turn up frequency when deform stiffness is high.
     parser.add_argument('--sim_gravity', type=float, default=-9.8,

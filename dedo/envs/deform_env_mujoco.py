@@ -21,6 +21,15 @@ import numpy as np
 from ..utils.args import preset_override_util
 from ..utils.task_info import DEFORM_INFO, SCENE_INFO, TASK_INFO
 
+def _read_obj_vertices(path: str) -> np.ndarray:
+    vs = []
+    with open(path) as f:
+        for line in f:
+            if line.startswith('v '):
+                vs.append([float(x) for x in line.split()[1:4]])
+    return np.array(vs, dtype=np.float64)
+
+
 def _clean_obj_for_flexcomp(src_path: str, dst_path: str) -> None:
     """Emit a geometry-only .obj that flexcomp can ingest cleanly.
 
@@ -317,15 +326,38 @@ class DeformEnvMuJoCo(gym.Env):
         mesh_rel = os.path.relpath(cleaned_abs, cache_root)
         meshdir = cache_root
 
-        # Stiffness mapping (PyBullet -> MuJoCo): rough heuristic, will need
-        # empirical tuning per task. Treat elastic as Young's modulus proxy.
-        young = max(50.0, info.get('deform_elastic_stiffness', 50.0) * 1e3)
-        damping = max(0.1, info.get('deform_damping_stiffness', 0.01) * 100.0)
+        # Compute anchor-vertex world positions at XML-build time. MuJoCo's
+        # <connect> equality bakes anchor2 into eq_data at compile time from
+        # the initial relative pose, so mocap bodies MUST start colocated
+        # with their target cloth vertices; otherwise the constraint pulls
+        # the cloth by the initial offset forever.
+        mesh_verts = _read_obj_vertices(cleaned_abs)
+        R_init = _rpy_to_mat(init_ori)
+        anchor_world = []
+        for vid in self.anchor_vertex_ids:
+            v_local = mesh_verts[vid] * scale
+            v_world = np.array(init_pos) + R_init @ v_local
+            anchor_world.append(v_world)
+        self._anchor_init_world = np.array(anchor_world)
+
+        # PyBullet → MuJoCo parameter mapping. The engines are too different
+        # for a 1:1 conversion, so these are heuristics with CLI overrides
+        # (--mj_young / --mj_thickness / --mj_mass / --mj_radius /
+        # --mj_edge_damping) used during tuning.
+        young = self.args.mj_young if self.args.mj_young is not None else max(
+            1e4, info.get('deform_elastic_stiffness', 50.0) * 1e3
+        )
+        damping = (self.args.mj_edge_damping
+                   if self.args.mj_edge_damping is not None
+                   else max(0.1, info.get('deform_damping_stiffness', 0.01) * 100.0))
+        thickness = self.args.mj_thickness if self.args.mj_thickness is not None else 0.02
+        cloth_mass = self.args.mj_mass if self.args.mj_mass is not None else 2.0
+        cloth_radius = self.args.mj_radius if self.args.mj_radius is not None else 0.02
 
         gravity = self.args.sim_gravity
 
-        anchor_init_pos = self.args.anchor_init_pos
-        other_init_pos = self.args.other_anchor_init_pos
+        anchor_init_pos = self._anchor_init_world[0]
+        other_init_pos = self._anchor_init_world[1]
 
         pin_xml = ''
         if self.fixed_pin_vertex_ids:
@@ -335,10 +367,11 @@ class DeformEnvMuJoCo(gym.Env):
             f'<flexcomp type="mesh" dim="2" name="cloth" file="{mesh_rel}" '
             f'pos="{init_pos[0]} {init_pos[1]} {init_pos[2]}" '
             f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}" '
-            f'scale="{scale} {scale} {scale}" mass="0.5" radius="0.02">'
-            f'<edge equality="true" damping="{damping}"/>'
+            f'scale="{scale} {scale} {scale}" mass="{cloth_mass}" '
+            f'radius="{cloth_radius}" rgba="0.2 0.55 0.9 1">'
+            f'<edge damping="{damping}"/>'
             f'<contact solref="0.01 1" friction="1.0"/>'
-            f'<elasticity young="{young}" poisson="0.0" thickness="5e-3"/>'
+            f'<elasticity young="{young}" poisson="0.0" thickness="{thickness}"/>'
             f'{pin_xml}'
             f'</flexcomp>'
         )
@@ -390,16 +423,18 @@ class DeformEnvMuJoCo(gym.Env):
   </option>
   <compiler meshdir="{meshdir}" angle="radian"/>
   <asset>
+    <material name="cloth_mat" rgba="0.2 0.5 0.9 1.0"/>
     {mesh_asset_xml}
   </asset>
   <equality>
     <connect name="mocap_connect_0" body1="mocap_0" body2="cloth_{self.anchor_vertex_ids[0]}"
-             anchor="0 0 0" solref="0.01 1" solimp=".95 .99 0.001" active="true"/>
+             anchor="0 0 0" solref="0.05 1" solimp="0.9 0.95 0.01" active="true"/>
     <connect name="mocap_connect_1" body1="mocap_1" body2="cloth_{self.anchor_vertex_ids[1]}"
-             anchor="0 0 0" solref="0.01 1" solimp=".95 .99 0.001" active="true"/>
+             anchor="0 0 0" solref="0.05 1" solimp="0.9 0.95 0.01" active="true"/>
   </equality>
   <worldbody>
     <light pos="0 0 20" dir="0 0 -1" directional="true"/>
+    <light pos="0 -10 10" dir="0 1 -0.5" directional="true" diffuse=".6 .6 .6"/>
     <geom name="floor" type="plane" pos="0 0 0" size="50 50 0.1" rgba="0.7 0.7 0.7 1"/>
     <body name="mocap_0" mocap="true" pos="{anchor_init_pos[0]} {anchor_init_pos[1]} {anchor_init_pos[2]}">
       <geom type="sphere" size="0.1" rgba="1 0 1 1" contype="0" conaffinity="0"/>
@@ -445,9 +480,6 @@ class DeformEnvMuJoCo(gym.Env):
         self.stepnum = 0
         self.episode_reward = 0.0
         mujoco.mj_resetData(self.model, self.data)
-        # Reset mocap positions to args defaults.
-        self.data.mocap_pos[self._mocap_idx[0]] = np.array(self.args.anchor_init_pos)
-        self.data.mocap_pos[self._mocap_idx[1]] = np.array(self.args.other_anchor_init_pos)
         mujoco.mj_forward(self.model, self.data)
         if self.args.viz and self.viewer is None:
             from mujoco import viewer as _mj_viewer
