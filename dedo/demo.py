@@ -18,9 +18,11 @@ import matplotlib.pyplot as plt
 from matplotlib import interactive
 
 interactive(True)
-import gym
+import gymnasium as gym
 import numpy as np
 
+from dedo.envs.deform_env import DeformEnv
+from dedo.envs.deform_robot_env import DeformRobotEnv
 from dedo.utils.args import get_args
 from dedo.utils.pcd_utils import render_video, visualize_data
 
@@ -55,7 +57,7 @@ def policy_simple(obs, act, task, step):
 def play(env, num_episodes, args):
     for epsd in range(num_episodes):
         print('------------ Play episode ', epsd, '------------------')
-        obs = env.reset()
+        obs, _ = env.reset(seed=args.seed)
         step = 0
         # input('Reset done; press enter to start episode')
         if args.pcd:
@@ -67,7 +69,8 @@ def play(env, num_episodes, args):
             noise_act = 0.1 * act
             act = policy_simple(obs, noise_act, args.task, step)
 
-            next_obs, rwd, done, info = env.step(act)
+            next_obs, rwd, terminated, truncated, info = env.step(act)
+            done = terminated or truncated
 
             if args.pcd:
                 # Grab additional obs from the environment
@@ -97,9 +100,8 @@ def play(env, num_episodes, args):
 def main(args):
     assert ('Robot' not in args.env), 'This is a simple demo for anchors only'
     np.set_printoptions(precision=4, linewidth=150, suppress=True)
-    kwargs = {'args': args}
-    env = gym.make(args.env, **kwargs)
-    env.seed(env.args.seed)
+    env_cls = DeformRobotEnv if args.env.startswith('FoodPacking') or 'Robot' in args.env else DeformEnv
+    env = env_cls(args)
     print('Created', args.task, 'with observation_space',
           env.observation_space.shape, 'action_space', env.action_space.shape)
     play(env, 1, args)

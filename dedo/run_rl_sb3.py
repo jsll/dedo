@@ -22,7 +22,7 @@ import pickle
 from copy import deepcopy
 from pathlib import Path
 
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 from stable_baselines3.common.env_util import DummyVecEnv, SubprocVecEnv, make_vec_env
@@ -44,8 +44,7 @@ def do_play(args, num_episodes=1):
     args.replay_size=10
     args.num_envs=0
     print('args', args)
-    eval_env = gym.make(args.env, args=args)
-    eval_env.seed(args.seed)
+    eval_env = gym.make(args.env, disable_env_checker=True, args=args)
     rl_agent = eval(args.rl_algo).load(checkpt, buffer_size=10) #, env=eval_env
     play(eval_env, num_episodes=num_episodes, rl_agent=rl_agent, debug=False,
          logdir=logdir, cam_resolution=cam_resolution, filename=run_name)
@@ -65,8 +64,7 @@ def main(args):
     # Stable Baselines3 only supports vectorized envs for on-policy algos.
     on_policy = args.rl_algo in ['A2C', 'PPO']
     n_envs = args.num_envs if on_policy else 1
-    eval_env = gym.make(args.env, args=args)
-    eval_env.seed(args.seed)
+    eval_env = gym.make(args.env, disable_env_checker=True, args=args)
     train_args = deepcopy(args)
     train_args.debug = False  # no debug during training
     train_args.viz = False  # no viz during training
@@ -74,7 +72,6 @@ def main(args):
         args.env, n_envs=n_envs,
         vec_env_cls=SubprocVecEnv if n_envs > 1 else DummyVecEnv,
         env_kwargs={'args': train_args})
-    vec_env.seed(args.seed)
     print('Created', args.task, 'with observation_space',
           vec_env.observation_space.shape, 'action_space',
           vec_env.action_space.shape)

@@ -34,7 +34,7 @@ def play(env, num_episodes, rl_agent, debug=False, logdir=None,
         episode_rwd = 0.0
         if debug:
             print('------------ Play episode ', epsd, '------------------')
-        obs = env.reset()
+        obs, _ = env.reset()
         if vidwriter is not None:
             img = env.render(mode='rgb_array', width=cam_resolution,
                              height=cam_resolution)
@@ -43,7 +43,8 @@ def play(env, num_episodes, rl_agent, debug=False, logdir=None,
         while True:
             # rl_agent.predict() to get acts, not forcing deterministic.
             act, _states = rl_agent.predict(obs)
-            next_obs, rwd, done, info = env.step(act)
+            next_obs, rwd, terminated, truncated, info = env.step(act)
+            done = terminated or truncated
             episode_rwd += rwd
             if vidwriter is not None:
                 img = env.render(mode='rgb_array', width=cam_resolution,

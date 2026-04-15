@@ -68,7 +68,6 @@ def main(args):
         args.env, n_envs=args.num_envs,
         vec_env_cls=SubprocVecEnv if args.num_envs > 1 else DummyVecEnv,
         env_kwargs={'args': train_args})
-    vec_env.seed(args.seed)
     print('Created', args.task, 'with observation_space',
           vec_env.observation_space.shape, 'action_space',
           vec_env.action_space.shape)

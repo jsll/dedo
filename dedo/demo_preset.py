@@ -14,7 +14,7 @@ add further comments, unify the style, improve efficiency and add unittests.
 """
 import os
 
-import gym
+import gymnasium as gym
 import matplotlib.pyplot as plt
 from matplotlib import interactive
 
@@ -23,6 +23,8 @@ import cv2
 import numpy as np
 import wandb
 
+from dedo.envs.deform_env import DeformEnv
+from dedo.envs.deform_robot_env import DeformRobotEnv
 from dedo.utils.anchor_utils import create_anchor_geom
 from dedo.utils.args import get_args
 from dedo.utils.bullet_manipulator import convert_all
@@ -59,7 +61,7 @@ def play(env, num_episodes, args):
 
     for epsd in range(num_episodes):
         print('------------ Play episode ', epsd, '------------------')
-        obs = env.reset()
+        obs, _ = env.reset(seed=args.seed)
         if args.cam_resolution > 0:
             img = env.render(mode='rgb_array', width=args.cam_resolution,
                              height=args.cam_resolution)
@@ -112,7 +114,8 @@ def play(env, num_episodes, args):
 
             act = traj[step] if step < len(traj) else last_action
 
-            next_obs, rwd, done, info = env.step(act, unscaled=True)
+            next_obs, rwd, terminated, truncated, info = env.step(act, unscaled=True)
+            done = terminated or truncated
             rwds.append(rwd)
 
             if done and vidwriter is not None:  # Record the internal steps after anchor drop
@@ -249,9 +252,8 @@ def plot_traj(traj):
 
 def main(args):
     np.set_printoptions(precision=4, linewidth=150, suppress=True)
-    kwargs = {'args': args}
-    env = gym.make(args.env, **kwargs)
-    env.seed(env.args.seed)
+    env_cls = DeformRobotEnv if args.env.startswith('FoodPacking') or 'Robot' in args.env else DeformEnv
+    env = env_cls(args)
     print('Created', args.task, 'with observation_space',
           env.observation_space.shape, 'action_space', env.action_space.shape)
     play(env, 1, args)

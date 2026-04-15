@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Dynamic Environments with Deformable Objects."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.8,<3.11"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    "gym==0.25.2",
+    "gymnasium>=1.0",
     "pybullet>=3.2.5",
     "scipy",
     "torch",
-    "stable_baselines3==1.2.0",
+    "stable_baselines3>=2.3",
     "matplotlib",
     "tensorboard",
     "tensorboardX",
@@ -23,7 +23,6 @@ dependencies = [
     "wandb",
     "pyaml",
     "opencv-python",
-    "importlib-metadata<5.0",
 ]
 
 [project.optional-dependencies]
@@ -43,7 +42,7 @@ include = ["dedo", "README.md", "LICENSE"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py310"
 extend-exclude = ["dedo/data", "images"]
 
 [tool.ruff.lint]

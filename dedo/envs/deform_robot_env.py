@@ -13,7 +13,7 @@ add further comments, unify the style, improve efficiency and add unittests.
 """
 import os
 
-import gym
+import gymnasium as gym
 import numpy as np
 import pybullet
 

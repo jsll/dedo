@@ -13,7 +13,7 @@ add further comments, unify the style, improve efficiency and add unittests.
 import os
 import time
 
-import gym
+import gymnasium as gym
 import numpy as np
 import pybullet
 import pybullet_utils.bullet_client as bclient
@@ -274,10 +274,10 @@ class DeformEnv(gym.Env):
 
         return rigid_ids, deform_id, deform_obj, np.array(goal_poses)
 
-    def seed(self, seed):
-        np.random.seed(seed)
-
-    def reset(self):
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        if seed is not None:
+            np.random.seed(seed)
         self.stepnum = 0
         self.episode_reward = 0.0
         self.anchors = {}
@@ -320,7 +320,7 @@ class DeformEnv(gym.Env):
                                                rgbaColor=[0, 0, 0, 0])
 
         obs, _ = self.get_obs()
-        return obs
+        return obs, {}
 
     def make_anchors(self):
         preset_dynamic_anchor_vertices = get_preset_properties(
@@ -370,11 +370,12 @@ class DeformEnv(gym.Env):
             self.sim.stepSimulation()
 
         # Get next obs, reward, done.
-        next_obs, done = self.get_obs()
+        next_obs, terminated = self.get_obs()
         reward = self.get_reward()
-        if done:  # if terminating early use reward from current step for rest
+        if terminated:  # if terminating early use reward from current step for rest
             reward *= (self.max_episode_len - self.stepnum)
-        done = (done or self.stepnum >= self.max_episode_len)
+        truncated = self.stepnum >= self.max_episode_len
+        done = terminated or truncated
 
         # Update episode info and call make_final_steps if needed.
         if done:
@@ -397,7 +398,7 @@ class DeformEnv(gym.Env):
 
         self.stepnum += 1
 
-        return next_obs, reward, done, info
+        return next_obs, reward, terminated, truncated, info
 
     def do_action(self, action, unscaled):
         # Action is num_anchors x 3 for 3D velocity for anchors/grippers.

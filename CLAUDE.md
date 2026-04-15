@@ -4,15 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Setup
 
-Managed with **uv**. Python 3.10 is pinned via `.python-version`; supported range is `>=3.8,<3.11` (upper bound from `stable_baselines3==1.2.0`).
+Managed with **uv**. Python 3.10 via `.python-version`; floor is `>=3.10`.
 
 ```
 uv sync --all-extras   # creates .venv, installs locked deps + dev tools
 ```
 
-Run any command inside the env with `uv run <cmd>` (e.g. `uv run uv run python -m dedo.demo ...`).
+Run any command inside the env with `uv run <cmd>`.
 
-**Pinned deps of note** (`pyproject.toml`): `gym==0.25.2`, `pybullet>=3.2.5`, `stable_baselines3==1.2.0`. The original repo pinned `gym==0.21.0` / `pybullet==3.1.7`; both were un-installable on modern toolchains (gym 0.21 has malformed wheel metadata, pybullet 3.1.7 won't compile under modern GCC) so they were bumped as part of tooling modernization. The code still uses the legacy gym 0.21 API (`env.seed`, 4-tuple `step`) which gym 0.25 accepts with deprecation warnings — a full gymnasium/sb3 2.x migration is deferred to phase 2.
+**Stack**: `gymnasium>=1.0`, `pybullet>=3.2.5`, `stable_baselines3>=2.3`, `torch` (latest). The env implements the modern gymnasium API: `reset(*, seed=None, options=None) -> (obs, info)` and `step(action) -> (obs, reward, terminated, truncated, info)`. `terminated` fires on workspace-limit violation; `truncated` fires when `stepnum >= max_episode_len`.
+
+**RLlib integration is currently broken** — `dedo/utils/rllib_utils.py` imports from the pre-2.0 `ray.rllib.agents` API which was removed in modern ray. `run_rllib.py` won't work until ported to the new RLlib algorithm builder API. The `[rllib]` extra is still declared for convenience, but don't assume it works.
+
+**Demos bypass the gym registry.** `demo.py` / `demo_preset.py` construct `DeformEnv` / `DeformRobotEnv` directly to avoid gymnasium's wrappers (which break transparent attribute access to `env.sim`, `env.robot`, `env.args`). The registry is still populated in `dedo/__init__.py` — it's what SB3's `make_vec_env` uses in `run_rl_sb3.py` / `run_svae.py`.
 
 ## Lint & format
 
@@ -53,7 +57,7 @@ CLI flags are centralized in `dedo/utils/args.py` — add/modify args there rath
 
 ## Architecture
 
-**Single Gym env, many tasks via registration.** `dedo/__init__.py` is the heart of the package: on import it walks `TASK_INFO` (from `dedo/utils/task_info.py`) and registers one Gym id per (task, mesh-variant) pair — e.g. `HangGarment-v0` (randomized) through `HangGarment-v10`. All tasks share a single env class: `DeformEnv` (`dedo/envs/deform_env.py`), except `FoodPacking*` and `HangGarmentRobot-v1` which use `DeformRobotEnv` (`dedo/envs/deform_robot_env.py`). Task behavior is driven by data (entries in `TASK_INFO` / `DEFORM_INFO`), not by subclassing.
+**Single gymnasium env, many tasks via registration.** `dedo/__init__.py` is the heart of the package: on import it walks `TASK_INFO` (from `dedo/utils/task_info.py`) and registers one gymnasium id per (task, mesh-variant) pair — e.g. `HangGarment-v0` (randomized) through `HangGarment-v10`. All tasks share a single env class: `DeformEnv` (`dedo/envs/deform_env.py`), except `FoodPacking*` and `HangGarmentRobot-v1` which use `DeformRobotEnv` (`dedo/envs/deform_robot_env.py`). Task behavior is driven by data (entries in `TASK_INFO` / `DEFORM_INFO`), not by subclassing.
 
 **Per-deformable physics config.** `DEFORM_INFO` in `task_info.py` maps each `.obj` path (relative to `dedo/data/`) to initial pose, scale, stiffness, and `deform_true_loop_vertices` used for success/reward computation. Adding a custom mesh = new entry in `DEFORM_INFO` + `--override_deform_obj path/to.obj`.
 
