@@ -5,11 +5,10 @@ deformable objects. It is aimed for researchers in the machine learning,
 reinforcement learning, robotics and computer vision communities.
 The suite provides a set of every day tasks that involve deformables, 
 such as hanging cloth, dressing a person, and buttoning buttons. 
-We provide examples for integrating two popular 
-reinforcement learning libraries: [StableBaselines3](https://github.com/DLR-RM/stable-baselines3) 
-and [RLlib](https://docs.ray.io/en/latest/rllib.html).
-We also provide reference implementaionts for training a various 
-Variational Autoencoder variants with our environment. 
+We provide an example for integrating 
+[StableBaselines3](https://github.com/DLR-RM/stable-baselines3) for
+reinforcement learning, as well as reference implementations for training
+various Variational Autoencoder variants with our environment.
 DEDO is easy to set up and has few dependencies, it is
 highly parallelizable and supports a wide range of customizations: 
 loading custom objects and textures, adjusting material properties. 
@@ -38,25 +37,36 @@ Please refer to **[Wiki for the full documentation ](../../wiki)**
 <a name="install"></a>
 ## Installation
 
-_Optional initial step_:  create a new conda environment with
-`conda create --name dedo python=3.7` and activate it with
-`conda activate dedo`. 
-Conda is not strictly needed, alternatives like virtualenv can be used;
-a direct install without using virtual environments is ok as well.
-
-
+The project is managed with [uv](https://docs.astral.sh/uv/) and targets **Python 3.10+**.
 
 ```
 git clone https://github.com/contactrika/dedo
 cd dedo
-pip install numpy  # important: for numpy-enabled PyBullet
-pip install -e .
+uv sync --all-extras   # creates .venv, installs locked deps + dev tools
 ```
-Python3.7 is recommended, since PyBullet compilation can have difficulties with Python 3.8 in some cases.
+
+### macOS build note
+
+On recent macOS versions, pybullet 3.2.7 fails to compile due to a
+conflict between its bundled zlib and the system SDK headers. Work around
+this by setting `CFLAGS` before the initial sync:
+
+```
+CFLAGS="-Wno-error=implicit-function-declaration -Dfdopen=fdopen" uv sync --all-extras
+```
+
+The project already configures `no-build-isolation-package = ["pybullet"]`
+in `pyproject.toml` so that pybullet is built with numpy available (required
+for `getCameraImage` to return numpy arrays).
+
+### Video recording
 
 To enable recording/logging videos install ffmpeg:
 ```
+# Linux
 sudo apt-get install ffmpeg
+# macOS
+brew install ffmpeg
 ```
 See more in **[Installation Guide in wiki](../../wiki/Installation)**
 <a name="examples"></a>
@@ -64,13 +74,13 @@ See more in **[Installation Guide in wiki](../../wiki/Installation)**
 To get started, one can run one of the following commands to visualize the tasks through a hard-coded policy. 
 
 ```
-python -m dedo.demo --env=HangGarment-v1 --viz --debug
+uv run python -m dedo.demo --env=HangGarment-v1 --viz --debug
 ```
 
 * `dedo.demo` is the demo module
 * `--env=HangGarment-v1` specifies the environment
 * `--viz` enables the GUI
-* `---debug` outputs additional information in the console
+* `--debug` outputs additional information in the console
 * `--cam_resolution 400` specifies the size of the output window
 
 
@@ -95,7 +105,7 @@ in `v0`).
 ### HangBag
 ![images/gifs/HangGarment-v1.gif](images/gifs/HangBag-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=HangBag-v1 --viz
+uv run python -m dedo.demo_preset --env=HangBag-v1 --viz
 ```
 `HangBag-v0`: selects one of 108 bag meshes; randomized textures
 
@@ -107,7 +117,7 @@ python -m dedo.demo_preset --env=HangBag-v1 --viz
 ### HangGarment
 ![images/gifs/HangGarment-v1.gif](images/gifs/HangGarment-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=HangGarment-v1 --viz
+uv run python -m dedo.demo_preset --env=HangGarment-v1 --viz
 ```
 `HangGarment-v0`: hang garment with randomized textures 
 (a few examples below):
@@ -127,7 +137,7 @@ python -m dedo.demo_preset --env=HangGarment-v1 --viz
 ### HangProcCloth
 ![images/gifs/HangGarment-v1.gif](images/gifs/HangProcCloth-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=HangProcCloth-v1 --viz
+uv run python -m dedo.demo_preset --env=HangProcCloth-v1 --viz
 ```
 `HangProcCloth-v0`: random textures, 
 procedurally generated cloth with 1 and 2 holes.
@@ -139,7 +149,7 @@ procedurally generated cloth with 1 and 2 holes.
 ### Buttoning
 ![images/gifs/HangGarment-v1.gif](images/gifs/Button-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=Button-v1 --viz
+uv run python -m dedo.demo_preset --env=Button-v1 --viz
 ```
 `ButtonProc-v0`: randomized textures and procedurally generated cloth with 
 2 holes, randomized hole/button positions.
@@ -159,7 +169,7 @@ python -m dedo.demo_preset --env=Button-v1 --viz
 ### Hoop
 ![images/gifs/HangGarment-v1.gif](images/gifs/Hoop-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=Hoop-v1 --viz
+uv run python -m dedo.demo_preset --env=Hoop-v1 --viz
 ```
 `Hoop-v0`: randomized textures
 `Hoop-v1`: pre-selected textures
@@ -167,7 +177,7 @@ python -m dedo.demo_preset --env=Hoop-v1 --viz
 ### Lasso
 ![images/gifs/HangGarment-v1.gif](images/gifs/Lasso-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=Lasso-v1 --viz
+uv run python -m dedo.demo_preset --env=Lasso-v1 --viz
 ```
 `Lasso-v0`: randomized textures
 `Lasso-v1`: pre-selected textures
@@ -178,7 +188,7 @@ python -m dedo.demo_preset --env=Lasso-v1 --viz
 ### DressBag
 ![images/gifs/HangGarment-v1.gif](images/gifs/DressBag-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=DressBag-v1 --viz
+uv run python -m dedo.demo_preset --env=DressBag-v1 --viz
 ```
 `DressBag-v0`, `DressBag-v[1-5]`: demo for `-v1` shown below
 
@@ -190,7 +200,7 @@ Visualizations of the 5 backpack mesh and texture variants for `DressBag-v[1-5]`
 ### DressGarment
 ![images/gifs/HangGarment-v1.gif](images/gifs/DressGarment-v1_0.gif)
 ```
-python -m dedo.demo_preset --env=DressGarment-v1 --viz
+uv run python -m dedo.demo_preset --env=DressGarment-v1 --viz
 ```
 `DressGarment-v0`, `DressGarment-v[1-5]`: demo for `-v1` shown below
 
@@ -199,7 +209,7 @@ python -m dedo.demo_preset --env=DressGarment-v1 --viz
 ### Mask
 ![images/gifs/Mask-v1.gif](https://github.com/yonkshi/dedo_assets/blob/main/assets/gifs/Mask-v1.gif?raw=true)
 ```
-python -m dedo.demo_preset --env=Mask-v1 --viz
+uv run python -m dedo.demo_preset --env=Mask-v1 --viz
 ```
 
 `Mask-v0`, `Mask-v[1-5]`: a few texture variants shown below:
@@ -208,7 +218,7 @@ python -m dedo.demo_preset --env=Mask-v1 --viz
 
 ### HangGarmentRobot
 ```
-python -m dedo.demo_preset --env=HangGarmentRobot-v1 --viz
+uv run python -m dedo.demo_preset --env=HangGarmentRobot-v1 --viz
 ```
 `HangGarmentRobot-v1`: A environment for demonstrating integration with Franka Robot Arm
 ![images/gifs/HangGarmentRobot-v1.gif](https://github.com/yonkshi/dedo_assets/blob/main/assets/gifs/HangGarmentRobot-v1.gif?raw=true)
@@ -216,7 +226,7 @@ python -m dedo.demo_preset --env=HangGarmentRobot-v1 --viz
 
 ### FoodPacking
 ```
-python -m dedo.demo_preset --env=FoodPacking-v1 --viz
+uv run python -m dedo.demo_preset --env=FoodPacking-v1 --viz
 ```
 `FoodPacking-v[0-3]`: Demonstrating robotic manipulation of pushing [YCB objects](https://www.ycbbenchmarks.com/)
 
@@ -229,16 +239,16 @@ active rigid and deformable object.
 
 Example usage, visual demo
 ```bash
-python -m dedo.demo --env=HangGarment-v1 --viz --debug --pcd --logdir rendered
-python -m dedo.demo --env=HangBag-v1 --viz --debug --pcd --logdir rendered
+uv run python -m dedo.demo --env=HangGarment-v1 --viz --debug --pcd --logdir rendered
+uv run python -m dedo.demo --env=HangBag-v1 --viz --debug --pcd --logdir rendered
 
 ```
 ![images/gifs/HangGarment-v1_pcd.gif](images/gifs/HangGarment-v1_pcd.gif)
 
 Example usage, preset trajectory demo
 ```bash
-python -m dedo.demo_preset --env=HangGarment-v1 --viz --debug --pcd --logdir rendered
-python -m dedo.demo_preset --env=HangBag-v1 --viz --debug --pcd --logdir rendered
+uv run python -m dedo.demo_preset --env=HangGarment-v1 --viz --debug --pcd --logdir rendered
+uv run python -m dedo.demo_preset --env=HangBag-v1 --viz --debug --pcd --logdir rendered
 
 ```
 ![images/gifs/HangGarment-v1_pcd.gif](images/gifs/HangGarment-v1_preset_pcd.gif)
@@ -251,24 +261,20 @@ Known issues:
 ## RL Examples
 
 `dedo/run_rl_sb3.py` gives an example of how to train an RL
-algorithm from Stable Baselines 3:
+algorithm with [Stable-Baselines3](https://github.com/DLR-RM/stable-baselines3):
 
 ```
-python -m dedo.run_rl_sb3 --env=HangGarment-v0 \
+uv run python -m dedo.run_rl_sb3 --env=HangGarment-v0 \
     --logdir=/tmp/dedo --num_play_runs=3 --viz --debug
 ```
 
-`dedo/run_rllib.py` gives an example of how to train an RL
-algorithm using RLLib:
-
-```
-python -m dedo.run_rllib --env=HangGarment-v0 \
-    --logdir=/tmp/dedo --num_play_runs=3 --viz --debug
-```
+> **Note:** RLlib integration (`run_rllib.py`) is currently broken.
+> It depends on the pre-2.0 `ray.rllib.agents` API which has been removed
+> in modern Ray. The `[rllib]` extra is still declared but non-functional.
 
 For documentation, please refer to [Arguments Reference](../../wiki/Arguments-Reference) page in wiki
 
-To launch the Tensorboard:
+To launch Tensorboard:
 ```
 tensorboard --logdir=/tmp/dedo --bind_all --port 6006 \
   --samples_per_plugin images=1000
@@ -279,19 +285,11 @@ tensorboard --logdir=/tmp/dedo --bind_all --port 6006 \
 `dedo/run_svae.py` gives an example of how to train various flavors of VAE:
 
 ```
-python -m dedo.run_rl_sb3 --env=HangGarment-v0 \
-    --logdir=/tmp/dedo --num_play_runs=3 --viz --debug
+uv run python -m dedo.run_svae --env=HangGarment-v0 \
+    --logdir=/tmp/dedo --viz --debug
 ```
 
-`dedo/run_rllib.py` gives an example of how to train an RL
-algorithm from Stable Baselines 3:
-
-```
-python -m dedo.run_rl_sb3 --env=HangGarment-v0 \
-    --logdir=/tmp/dedo --num_play_runs=3 --viz --debug
-```
-
-To launch the Tensorboard:
+To launch Tensorboard:
 ```
 tensorboard --logdir=/tmp/dedo --bind_all --port 6006 \
   --samples_per_plugin images=1000
@@ -325,7 +323,7 @@ DEFORM_INFO = {
 Then you can use `--override_deform_obj` flag:
 
 ```
-python -m dedo.demo --env=HangBag-v0 --cam_resolution 200 --viz --debug \
+uv run python -m dedo.demo --env=HangBag-v0 --cam_resolution 200 --viz --debug \
     --override_deform_obj bags/custom.obj
 ```
 
@@ -334,14 +332,14 @@ For items not in `DEFORM_DICT` you will need to specify sensible defaults,
 for example:
 
 ```
-python -m dedo.demo --env=HangGarment-v0 --viz --debug \
+uv run python -m dedo.demo --env=HangGarment-v0 --viz --debug \
   --override_deform_obj=generated_cloth/generated_cloth.obj \
   --deform_init_pos 0.02 0.41 0.63 --deform_init_ori 0 0 1.5708
 ```
 
 Example of scaling up the custom mesh objects:
 ```
-python -m dedo.demo --env=HangGarment-v0 --viz --debug \
+uv run python -m dedo.demo --env=HangGarment-v0 --viz --debug \
    --override_deform_obj=generated_cloth/generated_cloth.obj \
    --deform_init_pos 0.02 0.41 0.55 --deform_init_ori 0 0 1.5708 \
    --deform_scale 2.0 --anchor_init_pos -0.10 0.40 0.70 \
