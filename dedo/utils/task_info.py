@@ -282,6 +282,7 @@ DEFORM_INFO = {
         'plane_texture_file': 'textures/plane/white_marble.jpg',
         'rigid_texture_file': "textures/rigid/darkwood.jpg",
         'deform_texture_file': 'textures/deform/pb_bluegold_pattern.jpg',
+        'mj_overrides': {'young': 3e4, 'thickness': 0.05, 'mass': 0.8, 'elastic2d': 'bend'},
     },
     'bags/totes/bag1_0.obj': {
         'deform_init_pos': [0, 8, 2],
@@ -305,6 +306,7 @@ DEFORM_INFO = {
         'plane_texture_file': 'textures/plane/grey_tile.jpg',
         'rigid_texture_file': "textures/rigid/marble.png",
         'deform_texture_file': 'textures/deform/pb_jeans.jpg',
+        'mj_overrides': {'young': 3e4, 'thickness': 0.05, 'mass': 0.8, 'elastic2d': 'bend'},
     },
     'bags/totes/bag2_0.obj': {
         'deform_init_pos': [0, 8, 2],
@@ -330,6 +332,7 @@ DEFORM_INFO = {
              151, 150, 149, 148, 335, 334, 333, 332, 331, 330],
         ],
         'cam_viewmat': [8, -5.8, 272, 1.05, 4.04, 5.22],
+        'mj_overrides': {'young': 3e4, 'thickness': 0.05, 'mass': 0.8, 'elastic2d': 'bend'},
     },
     'bags/backpack_0.obj': {
         'deform_init_pos': [-0.2, 2, 4],
