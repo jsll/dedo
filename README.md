@@ -28,6 +28,7 @@ For a brief overview, please see our intro [video](https://www.youtube.com/watch
 **Table of Contents:**<br />
 [Installation](#install)<br />
 [GettingStarted](#examples)<br />
+[MuJoCo backend](#mujoco)<br />
 [Tasks](#tasks)<br />
 [Use with RL](#rl)<br />
 [Use with VAE](#svae)<br />
@@ -76,6 +77,35 @@ python -m dedo.demo --env=HangGarment-v1 --viz --debug
 
 See more in **[Usage-guide](../../wiki/Usage-guide)**
 
+<a name="mujoco"></a>
+## MuJoCo backend (experimental)
+
+DEDO ships with an experimental MuJoCo backend alongside the default PyBullet
+one. Install the optional dependency and pass `--backend=mujoco` to any of the
+`dedo.demo` / `dedo.demo_preset` / `dedo.run_rl_sb3` entry points:
+
+```
+uv sync --extra mujoco
+uv run python -m dedo.demo --env=HangGarment-v1 --backend=mujoco --viz --debug
+uv run python -m dedo.demo_preset --env=Button-v1 --backend=mujoco --viz
+uv run python -m dedo.run_rl_sb3 --env=HangBag-v1 --backend=mujoco \
+    --logdir=/tmp/dedo --num_play_runs=3
+```
+
+The backend is implemented in `dedo/envs/deform_env_mujoco.py` as a separate
+`DeformEnvMuJoCo` class. It reuses `TASK_INFO` / `DEFORM_INFO` for task
+parameters and reward computation, and drives a MuJoCo `flexcomp` deformable
+with two mocap-body anchors.
+
+Supported tasks: `HangGarment`, `HangBag`, `Button`, `Hoop`, `Lasso`.
+Observations: low-dim (anchor pose) and image (via `mujoco.Renderer`).
+Not yet supported: procedural tasks (`ButtonProc`, `HangProcCloth`), the Franka
+robot envs (`HangGarmentRobot`, `FoodPacking`), and `--pcd` point-cloud
+observations.
+
+To tune flexcomp material properties from the CLI use the
+`--mj_young`, `--mj_thickness`, `--mj_mass`, `--mj_radius`, and
+`--mj_edge_damping` flags (see `dedo/utils/args.py`).
 
 ## Tasks
 See more in **[Task Overview](../../wiki/Tasks-Overview)**

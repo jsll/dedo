@@ -11,6 +11,7 @@ Scope limitations vs DeformEnv:
 - Procedural / robot / FoodPacking tasks not supported yet.
 """
 
+import json
 import os
 import time
 
@@ -21,6 +22,25 @@ import numpy as np
 from ..utils.args import preset_override_util
 from ..utils.task_info import DEFORM_INFO, SCENE_INFO, TASK_INFO
 
+_MESH_MAPPINGS_PATH = os.path.join(
+    os.path.dirname(__file__), '..', '..', 'scripts', 'mesh_mappings.json'
+)
+
+
+def _load_mesh_mapping(deform_obj: str) -> list[int] | None:
+    """Return per-vertex remap from dedo-preset indices to current-mesh indices.
+
+    The dedo .obj files were re-annotated (new vertex ordering / count), but
+    DEFORM_INFO still holds preset-era indices. `scripts/mesh_mappings.json`
+    carries the translation; `-1` marks preset indices that no longer exist.
+    Returns None if the file is missing or the mesh isn't listed.
+    """
+    if not os.path.exists(_MESH_MAPPINGS_PATH):
+        return None
+    with open(_MESH_MAPPINGS_PATH) as f:
+        mappings = json.load(f)
+    return mappings.get(deform_obj)
+
 def _read_obj_vertices(path: str) -> np.ndarray:
     vs = []
     with open(path) as f:
@@ -30,19 +50,29 @@ def _read_obj_vertices(path: str) -> np.ndarray:
     return np.array(vs, dtype=np.float64)
 
 
-def _clean_obj_for_flexcomp(src_path: str, dst_path: str) -> None:
+def _clean_obj_for_flexcomp(src_path: str, dst_path: str,
+                            scale: float = 1.0) -> list[int]:
     """Emit a geometry-only .obj that flexcomp can ingest cleanly.
 
-    Two issues with the dedo .obj files:
-      1. UV seams produce multiple verts at identical positions; MuJoCo's
-         mesh importer merges them, which then makes faces referencing the
-         seam verts degenerate ("repeated vertex in element").
-      2. .mtl/vt/vn tokens are not needed by flexcomp.
+    dedo meshes split vertices at UV seams, so multiple verts share the same
+    3D position but have different indices — faces on either side of a seam
+    reference different duplicates. In MuJoCo flex, that leaves the cloth
+    topologically torn along every seam and it stretches/unzips under load.
+    Fix: collapse each duplicate group to a single canonical vertex and
+    remap face indices to it. MuJoCo's flex compiler drops vertices that no
+    face references and renumbers the rest, so we also drop orphan
+    duplicates from the output to keep a stable correspondence between
+    original vertex index and flex body index.
 
-    We keep the original vertex count and ordering so dedo's preset
-    `deform_anchor_vertices` indices remain valid, and slightly perturb
-    duplicate vert positions (epsilon along z) so MuJoCo does not merge
-    them. Faces are triangulated and emitted with vertex-only indices.
+    Vertices are pre-scaled by `scale` so the flexcomp XML can use scale=1
+    and edge rest-lengths line up with the initial configuration — required
+    for <edge equality="true"/> to act as a stable inextensibility
+    constraint.
+
+    Returns `remap`, a list where `remap[original_vid]` is the flex body
+    index the dedo preset should address (or -1 if the vertex had no
+    geometric counterpart). For duplicates, the remap points at the
+    canonical vertex's new index.
     """
     verts = []
     faces = []
@@ -56,32 +86,40 @@ def _clean_obj_for_flexcomp(src_path: str, dst_path: str) -> None:
             elif parts[0] == 'f':
                 idxs = [int(tok.split('/')[0]) - 1 for tok in parts[1:]]
                 faces.append(idxs)
-    verts = np.array(verts, dtype=np.float64)
+    verts = np.array(verts, dtype=np.float64) * scale
 
-    # Group duplicates by rounded position; perturb all but the first in each
-    # group so MuJoCo's mesh importer treats them as distinct.
     keys = [tuple(np.round(v, 6)) for v in verts]
-    seen: dict[tuple, int] = {}
-    eps = 1e-5
+    canonical: dict[tuple, int] = {}
+    canon_of = list(range(len(verts)))
     for i, k in enumerate(keys):
-        if k in seen:
-            verts[i, 2] += eps * (i - seen[k])  # monotone offset per dup
+        if k in canonical:
+            canon_of[i] = canonical[k]
         else:
-            seen[k] = i
+            canonical[k] = i
+
+    new_of_canon: dict[int, int] = {}
+    kept_positions = []
+    for i in range(len(verts)):
+        if canon_of[i] == i:
+            new_of_canon[i] = len(kept_positions)
+            kept_positions.append(verts[i])
+    remap = [new_of_canon[canon_of[i]] for i in range(len(verts))]
 
     tris = []
     for face in faces:
         for k in range(1, len(face) - 1):
-            tri = (face[0], face[k], face[k + 1])
+            tri = (remap[face[0]], remap[face[k]], remap[face[k + 1]])
             if len(set(tri)) == 3:
                 tris.append(tri)
 
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
     with open(dst_path, 'w') as f:
-        for v in verts:
+        for v in kept_positions:
             f.write(f'v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n')
         for tri in tris:
             f.write(f'f {tri[0] + 1} {tri[1] + 1} {tri[2] + 1}\n')
+
+    return remap
 
 
 def _rpy_to_mat(rpy):
@@ -318,9 +356,22 @@ class DeformEnvMuJoCo(gym.Env):
         if self.deform_obj in DEFORM_INFO:
             preset_override_util(args, DEFORM_INFO[self.deform_obj])
         info = DEFORM_INFO[self.deform_obj]
-        self.anchor_vertex_ids = [vs[0] for vs in info['deform_anchor_vertices']]
-        self.true_loop_vertices = info.get('deform_true_loop_vertices', None)
-        self.fixed_pin_vertex_ids = info.get('deform_fixed_anchor_vertex_ids', [])
+        anchor_ids = [vs[0] for vs in info['deform_anchor_vertices']]
+        loop_ids = info.get('deform_true_loop_vertices', None)
+        pin_ids = info.get('deform_fixed_anchor_vertex_ids', [])
+
+        # Translate preset-era vertex indices to the current re-annotated mesh.
+        mm = _load_mesh_mapping(self.deform_obj)
+        if mm is not None:
+            def _t(v):
+                return mm[v] if 0 <= v < len(mm) else -1
+            anchor_ids = [_t(v) for v in anchor_ids]
+            pin_ids = [_t(v) for v in pin_ids if _t(v) >= 0]
+            if loop_ids is not None:
+                loop_ids = [[_t(v) for v in loop if _t(v) >= 0] for loop in loop_ids]
+        self.anchor_vertex_ids = anchor_ids
+        self.true_loop_vertices = loop_ids
+        self.fixed_pin_vertex_ids = pin_ids
 
     def _build_model(self):
         info = DEFORM_INFO[self.deform_obj]
@@ -329,15 +380,31 @@ class DeformEnvMuJoCo(gym.Env):
         init_ori = info.get('deform_init_ori', self.args.deform_init_ori)
         quat = _euler_to_quat(init_ori)
 
-        # Generate cleaned mesh under a sibling cache dir so flexcomp ingests it.
-        cache_root = os.path.join(self.data_path, '_mujoco_cache')
+        # Generate cleaned mesh under a scale-specific cache dir. Vertices are
+        # pre-scaled so flexcomp scale=1 and edge rest-lengths match the
+        # initial configuration (required for <edge equality="true"/>).
+        # Rerun the cleanup every load so we always have the original->flex
+        # vertex remap (MuJoCo's flex compiler drops unreferenced verts and
+        # renumbers, so dedo preset indices need translation).
+        cache_root = os.path.join(self.data_path, '_mujoco_cache',
+                                  f's{scale:g}')
         cleaned_abs = os.path.join(cache_root, self.deform_obj)
-        if not os.path.exists(cleaned_abs):
-            _clean_obj_for_flexcomp(
-                os.path.join(self.data_path, self.deform_obj), cleaned_abs
-            )
+        remap = _clean_obj_for_flexcomp(
+            os.path.join(self.data_path, self.deform_obj), cleaned_abs,
+            scale=scale,
+        )
         mesh_rel = os.path.relpath(cleaned_abs, cache_root)
         meshdir = cache_root
+
+        # Translate preset vertex ids to flex body ids. Some dedo presets
+        # reference indices past the end of the mesh (harmless in PyBullet,
+        # which only uses them for reward), so drop out-of-range ones.
+        def _rm(vids):
+            return [remap[v] for v in vids if 0 <= v < len(remap)]
+        self.anchor_vertex_ids = _rm(self.anchor_vertex_ids)
+        self.fixed_pin_vertex_ids = _rm(self.fixed_pin_vertex_ids)
+        if self.true_loop_vertices is not None:
+            self.true_loop_vertices = [_rm(loop) for loop in self.true_loop_vertices]
 
         # Compute anchor-vertex world positions at XML-build time. MuJoCo's
         # <connect> equality bakes anchor2 into eq_data at compile time from
@@ -348,7 +415,7 @@ class DeformEnvMuJoCo(gym.Env):
         R_init = _rpy_to_mat(init_ori)
         anchor_world = []
         for vid in self.anchor_vertex_ids:
-            v_local = mesh_verts[vid] * scale
+            v_local = mesh_verts[vid]
             v_world = np.array(init_pos) + R_init @ v_local
             anchor_world.append(v_world)
         self._anchor_init_world = np.array(anchor_world)
@@ -380,9 +447,9 @@ class DeformEnvMuJoCo(gym.Env):
             f'<flexcomp type="mesh" dim="2" name="cloth" file="{mesh_rel}" '
             f'pos="{init_pos[0]} {init_pos[1]} {init_pos[2]}" '
             f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}" '
-            f'scale="{scale} {scale} {scale}" mass="{cloth_mass}" '
+            f'mass="{cloth_mass}" '
             f'radius="{cloth_radius}" rgba="0.2 0.55 0.9 1">'
-            f'<edge damping="{damping}"/>'
+            f'<edge equality="true" damping="{damping}"/>'
             f'<contact solref="0.01 1" friction="1.0"/>'
             f'<elasticity young="{young}" poisson="0.0" thickness="{thickness}"/>'
             f'{pin_xml}'
