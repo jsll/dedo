@@ -101,13 +101,18 @@ def play(env, num_episodes, args):
 
 
 def main(args):
-    assert ('Robot' not in args.env), 'This is a simple demo for anchors only'
     np.set_printoptions(precision=4, linewidth=150, suppress=True)
+    robot_env = args.env.startswith('FoodPacking') or 'Robot' in args.env
     if getattr(args, 'backend', 'pybullet') == 'mujoco':
-        from dedo.envs.deform_env_mujoco import DeformEnvMuJoCo
-        env = DeformEnvMuJoCo(args)
+        if robot_env:
+            from dedo.envs.deform_robot_env_mujoco import DeformRobotEnvMuJoCo
+            env = DeformRobotEnvMuJoCo(args)
+        else:
+            from dedo.envs.deform_env_mujoco import DeformEnvMuJoCo
+            env = DeformEnvMuJoCo(args)
     else:
-        env_cls = DeformRobotEnv if args.env.startswith('FoodPacking') or 'Robot' in args.env else DeformEnv
+        assert ('Robot' not in args.env), 'This is a simple demo for anchors only'
+        env_cls = DeformRobotEnv if robot_env else DeformEnv
         env = env_cls(args)
     print('Created', args.task, 'with observation_space',
           env.observation_space.shape, 'action_space', env.action_space.shape)

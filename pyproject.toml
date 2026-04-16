@@ -29,6 +29,7 @@ dependencies = [
 rllib = ["ray[rllib]"]
 mujoco = [
     "mujoco>=3.2",
+    "mink>=0.0.5",
 ]
 
 [dependency-groups]

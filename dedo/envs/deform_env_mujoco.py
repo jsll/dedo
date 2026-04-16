@@ -20,6 +20,10 @@ import mujoco
 import numpy as np
 
 from ..utils.args import preset_override_util
+from ..utils.procedural_utils import (
+    gen_procedural_button_cloth,
+    gen_procedural_hang_cloth,
+)
 from ..utils.task_info import DEFORM_INFO, SCENE_INFO, TASK_INFO
 
 _MESH_MAPPINGS_PATH = os.path.join(
@@ -307,8 +311,13 @@ class DeformEnvMuJoCo(gym.Env):
 
         self.data_path = os.path.join(os.path.dirname(__file__), '..', 'data')
         args.data_path = self.data_path
+        self.procedural = args.task in ('HangProcCloth', 'ButtonProc')
         self._select_deform_obj()
         self.goal_pos = np.array(SCENE_INFO[self.scene_name]['goal_pos'])
+        if args.task == 'HangProcCloth':
+            # Parity with PyBullet: reward averages over both holes, so
+            # duplicate the single hanger goal into one per loop.
+            self.goal_pos = np.vstack((self.goal_pos, self.goal_pos))
 
         self.max_episode_len = args.max_episode_len
         self.dt = 1.0 / args.sim_freq
@@ -341,11 +350,46 @@ class DeformEnvMuJoCo(gym.Env):
         self.viewer = None
         self._build_model()
 
+    # ---- subclass hooks ------------------------------------------------
+    def _extra_xml_fragments(self):
+        """Return (asset_xml, worldbody_xml, actuator_xml, equality_xml) to splice in."""
+        return '', '', '', ''
+
+    def _cloth_attach_bodies(self):
+        """Bodies that the cloth anchor vertices connect to via <connect>."""
+        return 'mocap_0', 'mocap_1'
+
     # ---- setup helpers -------------------------------------------------
     def _select_deform_obj(self):
         args = self.args
         if args.override_deform_obj is not None:
             self.deform_obj = args.override_deform_obj
+        elif args.task == 'HangProcCloth':
+            args.node_density = 15
+            if args.version == 0:
+                args.num_holes = np.random.randint(2) + 1
+            elif args.version in (1, 2):
+                args.num_holes = args.version
+            else:
+                args.num_holes = 1
+            self.deform_obj = gen_procedural_hang_cloth(
+                args, 'procedural_hang_cloth', DEFORM_INFO)
+        elif args.task == 'ButtonProc':
+            args.num_holes = 2
+            args.node_density = 15
+            self.deform_obj, hole_centers = gen_procedural_button_cloth(
+                args, 'proc_button_cloth', DEFORM_INFO)
+            # Move buttons + goals to match the generated hole positions
+            # (mirrors deform_env.py handling).
+            h1, h2 = hole_centers
+            h1 = (-h1[1], 0, h1[2] + 2)
+            h2 = (-h2[1], 0, h2[2] + 2)
+            buttons = SCENE_INFO['button']
+            buttons['entities']['urdf/button_fixed.urdf']['basePosition'] = (
+                h1[0], 0.2, h1[2])
+            buttons['entities']['urdf/button_fixed2.urdf']['basePosition'] = (
+                h2[0], 0.2, h2[2])
+            buttons['goal_pos'] = [list(h1), list(h2)]
         else:
             assert args.task in TASK_INFO, f'Unknown task {args.task}'
             versions = TASK_INFO[args.task]
@@ -388,11 +432,14 @@ class DeformEnvMuJoCo(gym.Env):
         # renumbers, so dedo preset indices need translation).
         cache_root = os.path.join(self.data_path, '_mujoco_cache',
                                   f's{scale:g}')
-        cleaned_abs = os.path.join(cache_root, self.deform_obj)
-        remap = _clean_obj_for_flexcomp(
-            os.path.join(self.data_path, self.deform_obj), cleaned_abs,
-            scale=scale,
-        )
+        if os.path.isabs(self.deform_obj):
+            src_obj = self.deform_obj
+            cleaned_abs = os.path.join(
+                cache_root, '_abs', os.path.basename(self.deform_obj))
+        else:
+            src_obj = os.path.join(self.data_path, self.deform_obj)
+            cleaned_abs = os.path.join(cache_root, self.deform_obj)
+        remap = _clean_obj_for_flexcomp(src_obj, cleaned_abs, scale=scale)
         mesh_rel = os.path.relpath(cleaned_abs, cache_root)
         meshdir = cache_root
 
@@ -512,6 +559,11 @@ class DeformEnvMuJoCo(gym.Env):
             for n, p, s in mesh_assets
         )
 
+        # Subclass hooks (default: empty — robot env overrides).
+        extra_assets, extra_worldbody, extra_actuators, extra_equality = \
+            self._extra_xml_fragments()
+        attach0, attach1 = self._cloth_attach_bodies()
+
         xml = f"""
 <mujoco model="dedo_mujoco">
   <option timestep="{self.dt}" integrator="implicitfast" gravity="0 0 {gravity}">
@@ -521,12 +573,14 @@ class DeformEnvMuJoCo(gym.Env):
   <asset>
     <material name="cloth_mat" rgba="0.2 0.5 0.9 1.0"/>
     {mesh_asset_xml}
+    {extra_assets}
   </asset>
   <equality>
-    <connect name="mocap_connect_0" body1="mocap_0" body2="cloth_{self.anchor_vertex_ids[0]}"
+    <connect name="cloth_connect_0" body1="{attach0}" body2="cloth_{self.anchor_vertex_ids[0]}"
              anchor="0 0 0" solref="{connect_solref}" solimp="{connect_solimp}" active="true"/>
-    <connect name="mocap_connect_1" body1="mocap_1" body2="cloth_{self.anchor_vertex_ids[1]}"
+    <connect name="cloth_connect_1" body1="{attach1}" body2="cloth_{self.anchor_vertex_ids[1]}"
              anchor="0 0 0" solref="{connect_solref}" solimp="{connect_solimp}" active="true"/>
+    {extra_equality}
   </equality>
   <worldbody>
     <light pos="0 0 20" dir="0 0 -1" directional="true"/>
@@ -542,7 +596,11 @@ class DeformEnvMuJoCo(gym.Env):
       {flexcomp_xml}
     </body>
     {rigid_xml}
+    {extra_worldbody}
   </worldbody>
+  <actuator>
+    {extra_actuators}
+  </actuator>
 </mujoco>
 """
         self.model = mujoco.MjModel.from_xml_string(xml)
@@ -575,6 +633,16 @@ class DeformEnvMuJoCo(gym.Env):
             np.random.seed(seed)
         self.stepnum = 0
         self.episode_reward = 0.0
+        if self.procedural:
+            # Regenerate cloth (new random holes/size) and rebuild the model.
+            self._select_deform_obj()
+            self.goal_pos = np.array(SCENE_INFO[self.scene_name]['goal_pos'])
+            if self.args.task == 'HangProcCloth':
+                self.goal_pos = np.vstack((self.goal_pos, self.goal_pos))
+            if self.viewer is not None:
+                self.viewer.close()
+                self.viewer = None
+            self._build_model()
         mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
         if self.args.viz and self.viewer is None:
@@ -670,6 +738,91 @@ class DeformEnvMuJoCo(gym.Env):
     def render(self, mode='rgb_array', width=300, height=300):
         assert mode == 'rgb_array'
         return self._render_rgb(width=width, height=height)
+
+    def _camera_world_pose(self):
+        """World-space camera position and camera-to-world rotation matrix.
+
+        Uses the cam_viewmat (distance, elevation, azimuth, lookat) that
+        drives both the passive viewer and the offscreen renderer, so PCD
+        coordinates match what the user sees.
+        """
+        dist = float(self._render_cam.distance)
+        elev = np.radians(float(self._render_cam.elevation))
+        azim = np.radians(float(self._render_cam.azimuth))
+        lookat = np.array(self._render_cam.lookat, dtype=np.float64)
+        ce, se = np.cos(elev), np.sin(elev)
+        ca, sa = np.cos(azim), np.sin(azim)
+        forward = np.array([ce * ca, ce * sa, se])  # cam → lookat direction
+        cam_pos = lookat - dist * forward
+        world_up = np.array([0.0, 0.0, 1.0])
+        right = np.cross(forward, world_up)
+        right /= np.linalg.norm(right)
+        up = np.cross(right, forward)
+        R_cw = np.column_stack([right, up, -forward])  # OpenGL: cam z = -fwd
+        return cam_pos, R_cw
+
+    def get_pcd_obs(self):
+        """Render RGB + depth + segmentation and unproject to world points.
+
+        Mirrors DeformEnv.get_pcd_obs: returns {'img', 'pcd', 'ids'}. Floor is
+        excluded; flex (cloth) points get id 0, rigid geoms keep their geom id.
+        """
+        assert self.args.cam_resolution > 0, 'PCD needs --cam_resolution > 0'
+        self._ensure_renderer()
+        r = self._renderer
+        cam = self._render_cam
+
+        r.disable_depth_rendering()
+        r.disable_segmentation_rendering()
+        r.update_scene(self.data, camera=cam)
+        rgb = r.render()
+
+        r.enable_depth_rendering()
+        r.update_scene(self.data, camera=cam)
+        depth = np.array(r.render(), copy=True)
+        r.disable_depth_rendering()
+
+        r.enable_segmentation_rendering()
+        r.update_scene(self.data, camera=cam)
+        seg = np.array(r.render(), copy=True)
+        r.disable_segmentation_rendering()
+
+        obj_id = seg[..., 0]
+        obj_type = seg[..., 1]
+        floor_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_GEOM, 'floor')
+        valid = obj_id >= 0
+        if floor_id >= 0:
+            valid &= ~((obj_type == int(mujoco.mjtObj.mjOBJ_GEOM))
+                       & (obj_id == floor_id))
+
+        H, W = depth.shape
+        fovy_deg = float(self.model.vis.global_.fovy)
+        fy = 0.5 * H / np.tan(np.radians(fovy_deg) / 2.0)
+        fx = fy  # square pixels; W==H for our renderer
+        cx, cy = W / 2.0, H / 2.0
+
+        vs, us = np.where(valid)
+        d = depth[vs, us].astype(np.float64)
+        x_cam = (us - cx) * d / fx
+        y_cam = -(vs - cy) * d / fy
+        z_cam = -d
+        cam_pos, R_cw = self._camera_world_pose()
+        cam_xyz = np.stack([x_cam, y_cam, z_cam], axis=1)
+        pts_world = cam_xyz @ R_cw.T + cam_pos
+
+        flex_type = int(mujoco.mjtObj.mjOBJ_FLEX)
+        ids = np.where(obj_type[vs, us] == flex_type, 0, obj_id[vs, us])
+
+        img = rgb[..., :3]
+        if self.args.uint8_pixels:
+            img = img.astype(np.uint8)
+        else:
+            img = np.clip(img.astype(np.float32) / 255.0, 0, 1).astype(np.float32)
+        if self.args.flat_obs:
+            img = img.reshape(-1)
+
+        return {'img': img, 'pcd': pts_world, 'ids': ids.astype(np.int64)}
 
     def _get_obs(self):
         grip = self._grip_obs()
