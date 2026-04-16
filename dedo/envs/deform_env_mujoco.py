@@ -424,15 +424,31 @@ class DeformEnvMuJoCo(gym.Env):
         # for a 1:1 conversion, so these are heuristics with CLI overrides
         # (--mj_young / --mj_thickness / --mj_mass / --mj_radius /
         # --mj_edge_damping) used during tuning.
-        young = self.args.mj_young if self.args.mj_young is not None else max(
-            1e4, info.get('deform_elastic_stiffness', 50.0) * 1e3
-        )
-        damping = (self.args.mj_edge_damping
-                   if self.args.mj_edge_damping is not None
-                   else max(0.1, info.get('deform_damping_stiffness', 0.01) * 100.0))
-        thickness = self.args.mj_thickness if self.args.mj_thickness is not None else 0.02
-        cloth_mass = self.args.mj_mass if self.args.mj_mass is not None else 2.0
-        cloth_radius = self.args.mj_radius if self.args.mj_radius is not None else 0.02
+        mj_over = info.get('mj_overrides', {})
+
+        def _pick(cli_val, key, fallback):
+            if cli_val is not None:
+                return cli_val
+            return mj_over.get(key, fallback)
+
+        young = _pick(self.args.mj_young, 'young',
+                      max(1e4, info.get('deform_elastic_stiffness', 50.0) * 1e3))
+        damping = _pick(self.args.mj_edge_damping, 'edge_damping',
+                        max(0.1, info.get('deform_damping_stiffness', 0.01) * 100.0))
+        thickness = _pick(self.args.mj_thickness, 'thickness', 0.02)
+        cloth_mass = _pick(self.args.mj_mass, 'mass', 2.0)
+        cloth_radius = _pick(self.args.mj_radius, 'radius', 0.02)
+        elastic2d = mj_over.get('elastic2d', 'none')
+        # Bending-enabled shells push hard against the mocap-connect and edge-
+        # equality constraints, so they need tighter solver targets to stay
+        # attached. Pure-membrane cloth (garments) was tuned with looser
+        # constraints and goes unstable if we tighten them globally.
+        if elastic2d == 'none':
+            connect_solref, connect_solimp = '0.05 1', '0.9 0.95 0.01'
+            edge_eq_attrs = ''
+        else:
+            connect_solref, connect_solimp = '0.005 1', '0.99 0.999 0.001'
+            edge_eq_attrs = ' solref="0.005 1" solimp="0.99 0.999 0.001"'
 
         gravity = self.args.sim_gravity
 
@@ -449,9 +465,9 @@ class DeformEnvMuJoCo(gym.Env):
             f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}" '
             f'mass="{cloth_mass}" '
             f'radius="{cloth_radius}" rgba="0.2 0.55 0.9 1">'
-            f'<edge equality="true" damping="{damping}"/>'
+            f'<edge equality="true" damping="{damping}"{edge_eq_attrs}/>'
             f'<contact solref="0.01 1" friction="1.0"/>'
-            f'<elasticity young="{young}" poisson="0.0" thickness="{thickness}"/>'
+            f'<elasticity young="{young}" poisson="0.0" thickness="{thickness}" elastic2d="{elastic2d}"/>'
             f'{pin_xml}'
             f'</flexcomp>'
         )
@@ -508,9 +524,9 @@ class DeformEnvMuJoCo(gym.Env):
   </asset>
   <equality>
     <connect name="mocap_connect_0" body1="mocap_0" body2="cloth_{self.anchor_vertex_ids[0]}"
-             anchor="0 0 0" solref="0.05 1" solimp="0.9 0.95 0.01" active="true"/>
+             anchor="0 0 0" solref="{connect_solref}" solimp="{connect_solimp}" active="true"/>
     <connect name="mocap_connect_1" body1="mocap_1" body2="cloth_{self.anchor_vertex_ids[1]}"
-             anchor="0 0 0" solref="0.05 1" solimp="0.9 0.95 0.01" active="true"/>
+             anchor="0 0 0" solref="{connect_solref}" solimp="{connect_solimp}" active="true"/>
   </equality>
   <worldbody>
     <light pos="0 0 20" dir="0 0 -1" directional="true"/>
@@ -564,6 +580,12 @@ class DeformEnvMuJoCo(gym.Env):
         if self.args.viz and self.viewer is None:
             from mujoco import viewer as _mj_viewer
             self.viewer = _mj_viewer.launch_passive(self.model, self.data)
+            dist, pitch, yaw, px, py, pz = self.args.cam_viewmat
+            self.viewer.cam.distance = float(dist)
+            self.viewer.cam.elevation = float(pitch)
+            self.viewer.cam.azimuth = float(yaw)
+            self.viewer.cam.lookat[:] = [float(px), float(py), float(pz)]
+            self.viewer.sync()
         obs, _ = self._get_obs()
         if not self.cam_on:
             obs = obs.astype(np.float32)
