@@ -555,11 +555,15 @@ class DeformEnvMuJoCo(gym.Env):
             anc.extend((self._mocap_vel[i] / self.MAX_OBS_VEL).tolist())
         return np.nan_to_num(np.array(anc))
 
-    def _ensure_renderer(self):
-        if self._renderer is not None:
-            return
+    def _ensure_renderer(self, width=None, height=None):
         res = int(self.args.cam_resolution)
-        self._renderer = mujoco.Renderer(self.model, height=res, width=res)
+        w = int(width) if width is not None else res
+        h = int(height) if height is not None else res
+        if self._renderer is not None:
+            if self._renderer.width == w and self._renderer.height == h:
+                return
+            self._renderer.close()
+        self._renderer = mujoco.Renderer(self.model, height=h, width=w)
         cam = mujoco.MjvCamera()
         mujoco.mjv_defaultCamera(cam)
         dist, pitch, yaw, px, py, pz = self.args.cam_viewmat
@@ -569,10 +573,14 @@ class DeformEnvMuJoCo(gym.Env):
         cam.lookat[:] = [float(px), float(py), float(pz)]
         self._render_cam = cam
 
-    def _render_rgb(self):
-        self._ensure_renderer()
+    def _render_rgb(self, width=None, height=None):
+        self._ensure_renderer(width=width, height=height)
         self._renderer.update_scene(self.data, camera=self._render_cam)
         return self._renderer.render()  # HxWx3 uint8
+
+    def render(self, mode='rgb_array', width=300, height=300):
+        assert mode == 'rgb_array'
+        return self._render_rgb(width=width, height=height)
 
     def _get_obs(self):
         grip = self._grip_obs()
@@ -617,3 +625,11 @@ class DeformEnvMuJoCo(gym.Env):
     @property
     def sim(self):
         return self  # crude shim for callers expecting env.sim
+
+    @property
+    def anchors(self):
+        # Mirrors DeformEnv.anchors shape just enough for demo_preset.build_traj.
+        return {
+            i: {'pos': np.array(self.data.mocap_pos[self._mocap_idx[i]])}
+            for i in range(self.num_anchors)
+        }

@@ -67,7 +67,7 @@ def play(env, num_episodes, args):
                              height=args.cam_resolution)
             if vidwriter is not None:
                 vidwriter.write(img[..., ::-1])
-        if args.debug:
+        if args.debug and getattr(args, 'backend', 'pybullet') != 'mujoco':
             viz_waypoints(env.sim, preset_wp['a'], (1, 0, 0, 1))
             if 'b' in preset_wp:
                 viz_waypoints(env.sim, preset_wp['b'], (1, 0, 0, 0.5))
@@ -252,8 +252,12 @@ def plot_traj(traj):
 
 def main(args):
     np.set_printoptions(precision=4, linewidth=150, suppress=True)
-    env_cls = DeformRobotEnv if args.env.startswith('FoodPacking') or 'Robot' in args.env else DeformEnv
-    env = env_cls(args)
+    if getattr(args, 'backend', 'pybullet') == 'mujoco':
+        from dedo.envs.deform_env_mujoco import DeformEnvMuJoCo
+        env = DeformEnvMuJoCo(args)
+    else:
+        env_cls = DeformRobotEnv if args.env.startswith('FoodPacking') or 'Robot' in args.env else DeformEnv
+        env = env_cls(args)
     print('Created', args.task, 'with observation_space',
           env.observation_space.shape, 'action_space', env.action_space.shape)
     play(env, 1, args)
