@@ -37,10 +37,13 @@ def policy_simple(obs, act, task, step):
             act[:, 0] = 0.10  # increase x
     elif task in ['HangGarment', 'HangProcCloth']:
         act[:, 1] = -0.2
+        act[:, 2] = -0.1
     elif task in ['HangBag']:
-        # Dragging T Shirt
         act[:, 1] = -0.5
-        act[:, 2] = 0.6
+        act[:, 2] = 0.5
+    elif task in ['DressBag']:
+        act[:, 1] = -0.3
+        act[:, 2] = 0.4
     elif task in ['Dress']:
         act[:, 1] = -0.2
         act[:, 2] = 0.1
